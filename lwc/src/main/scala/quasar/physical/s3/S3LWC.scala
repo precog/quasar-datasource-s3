@@ -47,7 +47,7 @@ object S3LWC extends LightweightConnector {
 
 }
 
-final class S3FS(uri: Uri, client: Client) extends LightweightFileSystem {
+final class S3LWFS(uri: Uri, client: Client) extends LightweightFileSystem {
 
   implicit final class optApplyOps[B](self: B) {
     def >+>[A](opt: Option[A], f: (B, A) => B): B = opt.fold(self)(f(self, _))
@@ -88,5 +88,13 @@ final class S3FS(uri: Uri, client: Client) extends LightweightFileSystem {
     }
   }
 
-  def read(file: AFile): Task[Option[Stream[Task, Data]]] = ???
+  def streamingParse(stream: Stream[Task, String]): Stream[Task, Data] = {
+
+  }
+
+  def read(file: AFile): Task[Option[Stream[Task, Data]]] = {
+    val objectPath = Path.posixCodec.printPath(file).drop(1)
+    val queryUri = uri / objectPath
+    client.streaming(queryUri)(resp => resp.body)
+  }
 }

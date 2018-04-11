@@ -33,6 +33,8 @@ object Dependencies {
   private val fs2Version          = "0.9.6"
   private val fs2ScalazVersion    = "0.2.0"
 
+  val circeFs2Version             = "0.9.0"
+
   private val quasarVersion       = "38.2.3-f3f05e7"
 
   def lwc = Seq(
