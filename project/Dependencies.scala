@@ -32,8 +32,9 @@ object Dependencies {
   private val deloreanVersion     = "1.2.42-scalaz-7.2"
   private val fs2Version          = "0.9.6"
   private val fs2ScalazVersion    = "0.2.0"
+  private val scalaXmlVersion     = "1.1.0"
 
-  val circeFs2Version             = "0.9.0"
+  private val circeFs2Version     = "0.9.0"
 
   private val quasarVersion       = "38.2.3-f3f05e7"
 
@@ -77,12 +78,13 @@ object Dependencies {
     "org.http4s"                 %% "http4s-argonaut"           % http4sVersion,
     "org.http4s"                 %% "http4s-client"             % http4sVersion,
     "org.http4s"                 %% "http4s-server"             % http4sVersion,
+    "org.http4s"                 %% "http4s-scala-xml"          % http4sVersion,
     "org.http4s"                 %% "http4s-blaze-server"       % http4sVersion,
     "org.http4s"                 %% "http4s-blaze-client"       % http4sVersion,
-    "com.propensive"             %% "rapture-json"              % raptureVersion                       % Test,
-    "com.propensive"             %% "rapture-json-json4s"       % raptureVersion                       % Test,
     "eu.timepit"                 %% "refined-scalacheck"        % refinedVersion                       % Test,
-    "org.quasar-analytics"       %% "quasar-mimir-internal"     % quasarVersion
+    "org.quasar-analytics"       %% "quasar-mimir-internal"     % quasarVersion,
+    "org.scala-lang.modules"     %% "scala-xml"                 % scalaXmlVersion,
+    "io.circe"                   %% "circe-fs2"                 % circeFs2Version
   )
 
   def it = lwc ++ Seq(
