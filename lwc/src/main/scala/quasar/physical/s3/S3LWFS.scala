@@ -37,6 +37,8 @@ final class S3LWFS(uri: Uri, client: Client) extends LightweightFileSystem {
     def >+>[A](opt: Option[A], f: (B, A) => B): B = opt.fold(self)(f(self, _))
   }
 
+  private type APath = Path[Path.Abs, Any, Path.Sandboxed]
+
   private def aPathToObjectPrefix(apath: APath): Option[String] = {
     // don't provide prefix if listing the top-level,
     // otherwise drop the first /
@@ -44,12 +46,6 @@ final class S3LWFS(uri: Uri, client: Client) extends LightweightFileSystem {
       Path.posixCodec.printPath(apath).drop(1) // .replace("/", "%2F")
     }
   }
-
-  private def documentToPathSegments(document: xml.Elem): Option[Set[PathSegment]] = {
-    None
-  }
-
-  private type APath = Path[Path.Abs, Any, Path.Sandboxed]
 
   private def s3NameToPath(name: String): Option[APath] = {
     val unsandboxed =
@@ -103,7 +99,7 @@ final class S3LWFS(uri: Uri, client: Client) extends LightweightFileSystem {
       client.status(request).flatMap {
         case Status.Ok => true.point[Task]
         case Status.NotFound => false.point[Task]
-        case s => Task.fail(new Exception("Unexpected status $s"))
+        case s => Task.fail(new Exception(s"Unexpected status $s"))
       }
     }
   }
