@@ -26,7 +26,14 @@ import org.http4s.Uri
 import scalaz._
 import scalaz.concurrent.Task
 
-object S3LWC extends LightweightConnector {
+sealed trait S3JsonParsing
+
+object S3JsonParsing {
+  case object JsonArray extends S3JsonParsing
+  case object LineDelimited extends S3JsonParsing
+}
+
+final class S3LWC(jsonParsing: S3JsonParsing) extends LightweightConnector {
   private def delayEither[E, A](a: E \/ A): EitherT[Task, E, A] = {
     EitherT.eitherT(Task.delay(a))
   }
@@ -35,7 +42,7 @@ object S3LWC extends LightweightConnector {
     EitherT.rightT(Task.delay {
       val client = PooledHttp1Client()
       val \/-(httpUri) = Uri.fromString(uri.value)
-      (new S3LWFS(httpUri, client), client.shutdown)
+      (new S3LWFS(jsonParsing, httpUri, client), client.shutdown)
     })
 
 }

@@ -14,24 +14,27 @@
  * limitations under the License.
  */
 
-package quasar.physical.s3
+package quasar.physical.s3.impl
 
-import quasar.Data
-import quasar.contrib.pathy._
-import quasar.mimir.LightweightFileSystem
 import slamdata.Predef._
 
-import fs2.Stream
 import org.http4s.client.Client
-import org.http4s.Uri
+import org.http4s.{Method, Request, Status, Uri}
+import pathy.Path
+import quasar.contrib.pathy._
 import scalaz.concurrent.Task
 
-final class S3LWFS(jsonParsing: S3JsonParsing, uri: Uri, client: Client) extends LightweightFileSystem {
-
-  def children(dir: ADir): Task[Option[Set[PathSegment]]] = impl.children(client, uri, dir)
-
-  def read(file: AFile): Task[Option[Stream[Task, Data]]] = impl.read(jsonParsing, client, uri, file)
-
-  def exists(file: AFile): Task[Boolean] = impl.exists(client, uri, file)
-
+object exists {
+  def apply(client: Client, uri: Uri, file: AFile): Task[Boolean] = {
+    val objectPath = Path.posixCodec.printPath(file).drop(1)
+    Task.suspend {
+      val queryUri = uri / objectPath
+      val request = Request(uri = queryUri, method = Method.HEAD)
+      client.status(request).flatMap {
+        case Status.Ok => Task.now(true)
+        case Status.NotFound => Task.now(false)
+        case s => Task.fail(new Exception(s"Unexpected status $s"))
+      }
+    }
+  }
 }

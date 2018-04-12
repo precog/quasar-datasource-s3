@@ -16,22 +16,6 @@
 
 package quasar.physical.s3
 
-import quasar.Data
-import quasar.contrib.pathy._
-import quasar.mimir.LightweightFileSystem
-import slamdata.Predef._
-
-import fs2.Stream
-import org.http4s.client.Client
-import org.http4s.Uri
-import scalaz.concurrent.Task
-
-final class S3LWFS(jsonParsing: S3JsonParsing, uri: Uri, client: Client) extends LightweightFileSystem {
-
-  def children(dir: ADir): Task[Option[Set[PathSegment]]] = impl.children(client, uri, dir)
-
-  def read(file: AFile): Task[Option[Stream[Task, Data]]] = impl.read(jsonParsing, client, uri, file)
-
-  def exists(file: AFile): Task[Boolean] = impl.exists(client, uri, file)
-
+package object impl {
+  private type APath = pathy.Path[pathy.Path.Abs, scala.Any, pathy.Path.Sandboxed]
 }

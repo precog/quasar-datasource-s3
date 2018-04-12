@@ -37,6 +37,7 @@ object Dependencies {
   private val circeFs2Version     = "0.9.0"
 
   private val quasarVersion       = "38.2.3-f3f05e7"
+  private val shimsVersion        = "1.2"
 
   def lwc = Seq(
     "com.slamdata"               %% "slamdata-predef"           % "0.0.4",
@@ -84,7 +85,8 @@ object Dependencies {
     "eu.timepit"                 %% "refined-scalacheck"        % refinedVersion                       % Test,
     "org.quasar-analytics"       %% "quasar-mimir-internal"     % quasarVersion,
     "org.scala-lang.modules"     %% "scala-xml"                 % scalaXmlVersion,
-    "io.circe"                   %% "circe-fs2"                 % circeFs2Version
+    "io.circe"                   %% "circe-fs2"                 % circeFs2Version,
+    "com.codecommit"             %% "shims"                     % shimsVersion
   )
 
   def it = lwc ++ Seq(

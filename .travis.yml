@@ -1,0 +1,48 @@
+language: scala
+scala: 2.12.4
+jdk: oraclejdk8
+dist: trusty
+sudo: false
+
+script: 
+  - sbt test lwc/assembly
+
+before_deploy:
+  - chmod +x scripts/*
+  - . ./scripts/version
+  - . ./scripts/travis_tag
+
+deploy:
+  provider: releases
+  api_key:
+    secure: "Aeqn0XLb0iFbnTWBatFiHaLb7J0TaBw6ry69MjriF53rhHbyZvXE4B1nUO9/li+QYeEXR7bf/UHmPGX1pst8TFtNEhtzRoAlxn8z8z698J5ymKWcVXGAJUO7gv1QCRxCFusBR0BxMZf/lNxjYOjOCOs2EwkYK2VU3uvuo4LviHKX8Ggm1g/pvHPjT0orb3NzFFMi/JNLjwGLj/8RkNqeibHVb07aM1S+Yvh5QGRTd1oJwV6h2XPhyCl1PoywnU7jt/vHs0HOU5OXG+oJ0gtSZ3SjYJajN3/thbLzQOAClrxaoF7YGw8uPQa1vxCqNq9LOJwqBI2zcU5CbiCKP0vOjz+ECOWPaF5yTi8QaQXi5Zc8F5iHHbXSENVwffwELV40NlNMi6WOBVK4qyROfQjfRD9KYtwUTtBCjnvkBY+618BtrTFuE0VqsrMiobMItKNl/7NPfsiI00Rat3seqxPWhbSGvEV4Eyx0RB+THSnMeTgDeuRJVahazYFCpbq0l628XZB90h7LHq3qcijnZQLC2HLC+1x/z8i4r5JwialC8+Tl8q9ZuO6n9nNKGVWw5Wt2WK7JYWq/2J1HTFf+lVp9OaGi7wMfTO48g4nrnQ6V5H5SqyOfL7ofgt6ktPcBh+vKqTvHlXoezWLlT9r8UFrRSFzdD/hU+pQp6eCXcf2I2z8="
+  #file_glob: true
+  file:
+    - runner/target/scala-2.12/quasar-s3-assembly-$VERSION.jar
+  skip_cleanup: true
+  script: 
+    - ./scripts/version
+    - ./scripts/update_nix_file
+  on:
+    tags: false
+    #all_branches: true
+    # Omit tagged builds and publish on master and backport/*
+    #condition: $TRAVIS_TAG = '' && ($TRAVIS_BRANCH == "master" || $TRAVIS_BRANCH == backport/*)
+
+after_deploy:
+  - ./scripts/update_nix_file
+
+branches:
+  except:
+    - /^v\d+\.\d+\.\d+$/ # don't redundantly build tags
+
+cache:
+  directories:
+    - $HOME/.coursier/cache
+    - $HOME/.ivy2/cache
+    - $HOME/.sbt
+
+before_cache:
+  - find "$HOME/.sbt/" -name '*.lock' -print0 | xargs -0 rm
+  - find "$HOME/.ivy2/" -name 'ivydata-*.properties' -print0 | xargs -0 rm
+
