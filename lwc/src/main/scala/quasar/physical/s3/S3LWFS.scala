@@ -48,8 +48,8 @@ final class S3LWFS(uri: Uri, client: Client) extends LightweightFileSystem {
   }
 
   private def s3NameToPath(name: String): Option[APath] = {
-    val unsandboxed =
-      Path.posixCodec.parsePath[Option[Path[Path.Abs, Any, Path.Unsandboxed]]](
+    val unsandboxed: Option[Path[Path.Abs, Any, Path.Unsandboxed]] =
+      Path.posixCodec.parsePath(
         _ => none,
         _.some,
         _ => none,
@@ -76,16 +76,22 @@ final class S3LWFS(uri: Uri, client: Client) extends LightweightFileSystem {
           // TODO: here too, these xml ops can all fail
           (topLevelElem \\ "Contents").map(e => (e \\ "Key").text).toList
         }
-        childPaths <- children.traverse(s3NameToPath).fold[Task[List[APath]]](Task.fail(new Exception("Failed to parse S3 API response")))(Task.now)
+        // TODO: and here too
+        childPaths <- children.traverse(s3NameToPath)
+          .cata(Task.now, Task.fail(new Exception("Failed to parse S3 API response")))
+        // TODO: I want to log it when we have `childPaths.nonEmpty` but `!childPaths.element(dir)`.
         result =
         if (!childPaths.element(dir)) None
         else Some(
-          childPaths.filter(path =>
-            // AWS includes the folder itself in the returned results if it exists, so we have to remove it.
-            // same goes for files in folders *below* the listed folder.
-            path =/= dir && Path.parentDir(path) === Some(dir))
-          .flatMap(Path.peel(_).toList)
-          .map(_._2).toSet)
+          childPaths
+            .filter(path =>
+              // AWS includes the folder itself in the returned results if it exists, so we have to remove it.
+              // same goes for files in folders *below* the listed folder.
+              path =/= dir && Path.parentDir(path) === Some(dir))
+            // TODO: report an error when `Path.peel` fails, that's nonsense
+            .flatMap(Path.peel(_).toList)
+            // TODO: report an error if there are duplicates
+            .map(_._2).toSet)
       } yield result
     }
   }
