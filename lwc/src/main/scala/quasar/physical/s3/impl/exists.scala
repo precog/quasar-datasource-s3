@@ -33,7 +33,7 @@ object exists {
       client.status(request).flatMap {
         case Status.Ok => Task.now(true)
         case Status.NotFound => Task.now(false)
-        case s => Task.fail(new Exception(s"Unexpected status $s"))
+        case s => Task.fail(new Exception("Unexpected status returned during `exists` call: $s"))
       }
     }
   }

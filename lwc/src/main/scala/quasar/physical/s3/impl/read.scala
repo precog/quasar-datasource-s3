@@ -66,8 +66,11 @@ object read {
     val request = Request(uri = queryUri)
     val circeJsonPipe = circePipe[Task](jsonParsing)
     streamRequestThroughFs2(client, request) { resp =>
+      // TODO: can this fail? I don't believe so.
       val asFs2: Stream[Task, ByteVector] = spinoco.scalaz.stream.fs2Conversion.processToFs2(resp.body)
+      // TODO: a failure point
       val asStrings: Stream[Task, String] = asFs2.evalMap(_.decodeUtf8.fold(Task.fail, Task.now))
+      // TODO: another possible failure
       val asJson: Stream[Task, Json] = asStrings.through(circeJsonPipe)
       val asData: Stream[Task, Data] = asJson.map(circeJsonToData)
       asData

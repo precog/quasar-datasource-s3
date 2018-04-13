@@ -79,7 +79,7 @@ object children {
           .cata(Task.now, Task.fail(new Exception("Failed to parse S3 API response")))
         // TODO: I want to log it when we have `childPaths.nonEmpty` but `!childPaths.element(dir)`.
         result =
-        if (!childPaths.element(dir)) None
+        if (dir =/= Path.rootDir && !childPaths.element(dir)) None
         else Some(
           childPaths
             .filter(path =>
