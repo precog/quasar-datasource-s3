@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-package quasar.physical.s3.impl
+package quasar.physical.s3
+package impl
 
 import quasar.Data
 import quasar.contrib.pathy._
@@ -33,8 +34,8 @@ import scodec.bits.ByteVector
 object read {
 
   private def circePipe[F[_]](jsonParsing: S3JsonParsing): Pipe[F, String, Json] = jsonParsing match {
-    case S3JsonParsing.JsonArray => io.circe.fs2.stringArrayParser[F]
-    case S3JsonParsing.LineDelimited => io.circe.fs2.stringStreamParser[F]
+    case S3JsonParsing.JsonArray => parsing.stringArrayParser[F]
+    case S3JsonParsing.LineDelimited => parsing.stringStreamParser[F]
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.Recursion"))
@@ -54,7 +55,7 @@ object read {
       case DisposableResponse(response, dispose) =>
         response.status match {
           case Status.NotFound => Task.now(none)
-          case Status.Ok => Task.now(f(response).onComplete(Stream.eval_(dispose)).some)
+          case Status.Ok => Task.now(f(response).onFinalize[Task](dispose).some)
           case s => Task.fail(new Exception(s"Unexpected status $s"))
         }
     }
@@ -67,7 +68,7 @@ object read {
     val circeJsonPipe = circePipe[Task](jsonParsing)
     streamRequestThroughFs2(client, request) { resp =>
       // TODO: can this fail? I don't believe so.
-      val asFs2: Stream[Task, ByteVector] = spinoco.scalaz.stream.fs2Conversion.processToFs2(resp.body)
+      val asFs2: Stream[Task, ByteVector] = fs2Conversion.processToFs2(resp.body)
       // TODO: a failure point
       val asStrings: Stream[Task, String] = asFs2.evalMap(_.decodeUtf8.fold(Task.fail, Task.now))
       // TODO: another possible failure

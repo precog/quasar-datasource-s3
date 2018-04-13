@@ -64,7 +64,11 @@ lazy val buildSettings = commonBuildSettings ++ Seq(
 
   logBuffered in Test := isTravisBuild.value,
 
-  console := { (console in Test).value }) // console alias test:console
+  console := { (console in Test).value }, // console alias test:console
+  assemblyMergeStrategy in assembly := {
+    case PathList("META-INF", xs @ _*) => MergeStrategy.discard
+    case x => MergeStrategy.first
+  })
 
 val targetSettings = Seq(
   target := {
@@ -157,7 +161,6 @@ def isolatedBackendSettings(classnames: String*) = Seq(
 lazy val isCIBuild               = settingKey[Boolean]("True when building in any automated environment (e.g. Travis)")
 lazy val isIsolatedEnv           = settingKey[Boolean]("True if running in an isolated environment")
 lazy val exclusiveTestTag        = settingKey[String]("Tag for exclusive execution tests")
-lazy val sparkDependencyProvided = settingKey[Boolean]("Whether or not the spark dependency should be marked as provided. If building for use in a Spark cluster, one would set this to true otherwise setting it to false will allow you to run the assembly jar on it's own")
 
 lazy val isolatedBackends =
   taskKey[Seq[(String, Seq[File])]]("Global-only setting which contains all of the classpath-isolated backends")

@@ -16,8 +16,9 @@
 
 package quasar.physical.s3
 
+import quasar.fs.FileSystemType
 import quasar.fs.mount.ConnectionUri
-import quasar.mimir.{LightweightConnector, LightweightFileSystem}
+import quasar.mimir.{LightweightConnector, LightweightFileSystem, SlamDB}
 import slamdata.Predef._
 
 import org.http4s.client.blaze.PooledHttp1Client
@@ -44,5 +45,14 @@ final class S3LWC(jsonParsing: S3JsonParsing) extends LightweightConnector {
       val \/-(httpUri) = Uri.fromString(uri.value)
       (new S3LWFS(jsonParsing, httpUri, client), client.shutdown)
     })
+}
 
+object S3JsonArray extends SlamDB {
+  val Type: FileSystemType = FileSystemType("s3array")
+  val lwc: LightweightConnector = new S3LWC(S3JsonParsing.JsonArray)
+}
+
+object S3LineDelimited extends SlamDB {
+  val Type: FileSystemType = FileSystemType("s3linedelim")
+  val lwc: LightweightConnector = new S3LWC(S3JsonParsing.LineDelimited)
 }

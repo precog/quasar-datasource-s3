@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package spinoco.scalaz.stream
+package quasar.physical.s3
 
 import slamdata.Predef.{Stream => _, _}
 import scala.Predef.identity
@@ -25,14 +25,13 @@ import scalaz.concurrent.{Actor, Task}
 import scalaz.stream.Process
 import scala.language.higherKinds
 import scalaz.{-\/, \/, \/-}
-import shims._
 
-// ALL of the code below has been converted from fs2 0.9 to 0.10
-// from a gist of code originally written by Pavel Chlupacek (@pchlupacek on github)
+// the code below was adapted from a gist originally written by Pavel Chlupacek (@pchlupacek on github)
 // and shared with the community as https://gist.github.com/pchlupacek/989a2801036a9441da252726a1b4972d
-object fs2Conversion {
+private[s3] object fs2Conversion {
 
-  def processToFs2[A](in:Process[Task,A]): Stream[Task,A] = Stream.suspend {
+
+  def processToFs2[A](in:Process[Task,A]):Stream[Task,A] = Stream.suspend {
     import impl._
     val actor = syncActor[AttemptT, AttemptT, A]
 
@@ -48,23 +47,22 @@ object fs2Conversion {
     @SuppressWarnings(Array("org.wartremover.warts.Recursion"))
     def go:fs2.Stream[Task,A] = {
       Stream.eval(Task.async[Option[Chunk[A]]]{ cb =>
-        actor ! RequestChunk[AttemptT,A](cb)
+        actor ! RequestChunk[AttemptT, A](cb)
       }).flatMap {
         case None => Stream.empty // done
         case Some(chunk) => Stream.chunk(chunk) ++ go
       }
     }
 
+
     go
-    .handleErrorWith { rsn =>
-      Stream.eval_(Task.delay { actor ! SubscriberDone(Some(rsn)) }) ++ Stream.raiseError(rsn)
+    .onError { rsn =>
+      Stream.eval_(Task.delay { actor ! SubscriberDone(Some(rsn)) }) ++ Stream.fail(rsn)
     }
     .onFinalize {
       Task.delay(actor ! SubscriberDone(None))
     }
   }
-
-
 
   private object impl {
 
@@ -86,6 +84,7 @@ object fs2Conversion {
 
     }
 
+  // nothing ain't polykinded if you alias + import it from a custom predef
     final case class RegisterPublisher[F[+_]](cb: F[Boolean] => Unit) extends M[F,scala.Nothing,Nothing]
     final case class RequestChunk[F[+_], A](cb: F[Option[Chunk[A]]] => Unit) extends M[scala.Nothing,F,A]
     final case class OfferChunk[F[+_], A](chunk:Chunk[A], cb: F[Boolean] => Unit) extends M[F,scala.Nothing,A]
@@ -142,6 +141,7 @@ object fs2Conversion {
       })(scalaz.concurrent.Strategy.Sequential)
 
     }
+
 
   }
 
