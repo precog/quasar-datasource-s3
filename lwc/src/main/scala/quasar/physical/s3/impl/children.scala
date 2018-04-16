@@ -57,27 +57,38 @@ object children {
   }
 
   // this is a recursive listing which filters out children that aren't direct children.
-  // it also will only list 100 keys (and 1000 maximum, and it needs pagination to do more)
-  // that's 100 *recursively listed* keys, which means we could conceivably list *none*
+  // it also will only list 1000 keys, and it needs pagination to do more.
+  // that's 1000 *recursively listed* keys, which means we could conceivably list *none*
   // of the direct children of a folder, depending on the order AWS sends them in.
   def apply(client: Client, uri: Uri, dir: ADir): Task[Option[Set[PathSegment]]] = {
     val objectPrefix = aPathToObjectPrefix(dir)
-    val maxKeys = 100
     val queryUri = ((uri / "") +?
       ("list-type", 2)) >+>[String]
       (objectPrefix, _ +? ("prefix", _))
     Task.suspend {
       for {
-        // TODO: better error handling, please
         topLevelElem <- client.expect[xml.Elem](queryUri)
-        children <- Task.delay {
-          // TODO: here too, these xml ops can all fail
-          (topLevelElem \\ "Contents").map(e => (e \\ "Key").text).toList
+        children <- for {
+          contents <- Task.suspend {
+            try {
+              Task.now(topLevelElem \\ "Contents")
+            } catch {
+              case ex: Exception =>
+                Task.fail(new Exception("XML received from AWS API has no top-level <Contents> element", ex))
+            }
+          }
+          names <- contents.toList.traverse { elem =>
+            try {
+              Task.now((elem \\ "Key").text)
+            } catch {
+              case ex: Exception =>
+                Task.fail(new Exception("XML received from AWS API has no <Key> elements under <Contents>", ex))
+            }
         }
-        // TODO: and here too
+        } yield names
         childPaths <- children.traverse(s3NameToPath)
-          .cata(Task.now, Task.fail(new Exception("Failed to parse S3 API response")))
-        // TODO: I want to log it when we have `childPaths.nonEmpty` but `!childPaths.element(dir)`.
+          .cata(Task.now, Task.fail(new Exception(s"Failed to parse object path in S3 API response")))
+        // TODO: Pagination
         result =
         if (dir =/= Path.rootDir && !childPaths.element(dir)) None
         else Some(
