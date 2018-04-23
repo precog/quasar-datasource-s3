@@ -1,7 +1,7 @@
 import github.GithubPlugin._
 
 import scala.Predef._
-import quasar.project._
+import quasar.s3.project._
 
 import java.lang.{Integer, String, Throwable}
 import scala.{Boolean, List, Predef, None, Some, StringContext, sys, Unit}, Predef.{any2ArrowAssoc, assert, augmentString}
@@ -183,8 +183,6 @@ lazy val root = project.in(file("."))
 
 // common components
 
-val assembleLWC = TaskKey[Unit]("assembleLWC")
-
 /** Lightweight connector module.
   */
 lazy val lwc = project
@@ -201,25 +199,7 @@ lazy val lwc = project
   .settings(githubReleaseSettings)
   .settings(isolatedBackendSettings("quasar.physical.s3.S3$"))
   .settings(excludeTypelevelScalaLibrary)
-  .settings(
-    assembleLWC in Compile := {
-      import coursier._
-      import scala.concurrent.ExecutionContext.Implicits.global
-      val path = new File((crossTarget in Compile).value, "lwc")
-      println(path)
-      val start =
-        Dependencies.lwcCore.map(
-          moduleId => (Module(moduleId.organization, moduleId.name + "_2.12"), moduleId.revision)
-        )
-      val fetch = Fetch.from(
-        Seq(MavenRepository("https://repo1.maven.org/maven2")),
-        Cache.fetch(path, CachePolicy.Update, Cache.defaultChecksums, None, Cache.defaultPool, Cache.defaultTtl)
-      ).apply(start).unsafePerformSync
-      println(start)
-      println(fetch)
-      ()
-    }
-  )
+  .settings(AssembleLWC.setAssemblyKey)
   .enablePlugins(AutomateHeaderPlugin)
 
 /** An interactive REPL application for Quasar.
