@@ -99,11 +99,11 @@ lazy val publishSettings = commonPublishSettings ++ Seq(
   performSonatypeSync := false,   // basically just ignores all the sonatype sync parts of things
   organizationName := "SlamData Inc.",
   organizationHomepage := Some(url("http://quasar-analytics.org")),
-  homepage := Some(url("https://github.com/quasar-analytics/s3-quasar")),
+  homepage := Some(url("https://github.com/quasar-analytics/quasar-s3")),
   scmInfo := Some(
     ScmInfo(
-      url("https://github.com/quasar-analytics/s3-quasar"),
-      "scm:git@github.com:quasar-analytics/s3-quasar.git"
+      url("https://github.com/quasar-analytics/quasar-s3"),
+      "scm:git@github.com:quasar-analytics/quasar-s3.git"
     )
   ))
 
@@ -138,7 +138,7 @@ lazy val publishTestsSettings = Seq(
 lazy val githubReleaseSettings =
   githubSettings ++ Seq(
     GithubKeys.assets := Seq(assembly.value),
-    GithubKeys.repoSlug := "quasar-analytics/s3-quasar",
+    GithubKeys.repoSlug := "quasar-analytics/quasar-s3",
     GithubKeys.releaseName := "quasar " + GithubKeys.tag.value,
     releaseVersionFile := file("version.sbt"),
     releaseUseGlobalVersion := true,
@@ -151,21 +151,9 @@ lazy val githubReleaseSettings =
       pushChanges)
   )
 
-def isolatedBackendSettings(classnames: String*) = Seq(
-  isolatedBackends in Global ++=
-    classnames.map(_ -> (fullClasspath in Compile).value.files),
-
-  packageOptions in (Compile, packageBin) +=
-    Package.ManifestAttributes("Backend-Module" -> classnames.mkString(" ")))
-
 lazy val isCIBuild               = settingKey[Boolean]("True when building in any automated environment (e.g. Travis)")
 lazy val isIsolatedEnv           = settingKey[Boolean]("True if running in an isolated environment")
 lazy val exclusiveTestTag        = settingKey[String]("Tag for exclusive execution tests")
-
-lazy val isolatedBackends =
-  taskKey[Seq[(String, Seq[File])]]("Global-only setting which contains all of the classpath-isolated backends")
-
-isolatedBackends in Global := Seq()
 
 lazy val sideEffectTestFSConfig = taskKey[Unit]("Rewrite the JVM environment to contain the filesystem classpath information for integration tests")
 
@@ -197,12 +185,11 @@ lazy val lwc = project
       Wart.Equals,
       Wart.Overloading))
   .settings(githubReleaseSettings)
-  .settings(isolatedBackendSettings("quasar.physical.s3.S3$"))
   .settings(excludeTypelevelScalaLibrary)
   .settings(AssembleLWC.setAssemblyKey)
   .enablePlugins(AutomateHeaderPlugin)
 
-/** An interactive REPL application for Quasar.
+/** A project with a properly configured `console`
   */
 lazy val repl = project
   .settings(name := "quasar-repl")
@@ -210,14 +197,10 @@ lazy val repl = project
   .settings(commonSettings)
   .settings(githubReleaseSettings)
   .settings(targetSettings)
-  .settings(
-    fork in run := true,
-    connectInput in run := true,
-    outputStrategy := Some(StdoutOutput))
   .settings(excludeTypelevelScalaLibrary)
   .enablePlugins(AutomateHeaderPlugin)
 
-/** Integration tests that have some dependency on a running connector.
+/** S3-specific integration tests
   */
 lazy val it = project
   .settings(name := "quasar-s3-it")
