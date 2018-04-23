@@ -38,53 +38,15 @@ object Dependencies {
 
   private val quasarVersion       = "38.2.3-f3f05e7"
 
-  def lwc = Seq(
-    "com.slamdata"               %% "slamdata-predef"           % "0.0.4",
-    "org.scalaz"                 %% "scalaz-core"               % scalazVersion,
-    "org.scalaz"                 %% "scalaz-concurrent"         % scalazVersion,
-    "org.scalaz.stream"          %% "scalaz-stream"             % scalazStreamVersion,
-    "com.github.julien-truffaut" %% "monocle-core"              % monocleVersion,
-    "org.typelevel"              %% "algebra"                   % algebraVersion,
-    "org.typelevel"              %% "spire"                     % spireVersion,
-    "io.argonaut"                %% "argonaut"                  % argonautVersion,
-    "io.argonaut"                %% "argonaut-scalaz"           % argonautVersion,
-    "com.slamdata"               %% "matryoshka-core"           % matryoshkaVersion,
-    "com.slamdata"               %% "pathy-core"                % pathyVersion,
-    "com.slamdata"               %% "pathy-argonaut"            % pathyVersion,
-    "eu.timepit"                 %% "refined"                   % refinedVersion,
-    "com.chuusai"                %% "shapeless"                 % shapelessVersion,
-    "org.scalacheck"             %% "scalacheck"                % scalacheckVersion,
-    "com.propensive"             %% "contextual"                % "1.0.1",
-    "com.github.mpilquist"       %% "simulacrum"                % simulacrumVersion                    % Test,
-    "org.typelevel"              %% "algebra-laws"              % algebraVersion                       % Test,
-    "org.typelevel"              %% "discipline"                % disciplineVersion                    % Test,
-    "org.typelevel"              %% "spire-laws"                % spireVersion                         % Test,
-    "org.specs2"                 %% "specs2-core"               % specsVersion                         % Test,
-    "org.specs2"                 %% "specs2-scalacheck"         % specsVersion                         % Test,
-    "org.scalaz"                 %% "scalaz-scalacheck-binding" % (scalazVersion + "-scalacheck-1.13") % Test,
-    "org.typelevel"              %% "shapeless-scalacheck"      % "0.6.1"                              % Test,
-    "org.typelevel"              %% "scalaz-specs2"             % "0.5.2"                              % Test,
-    "com.github.julien-truffaut" %% "monocle-macro"             % monocleVersion,
-    "org.scala-lang.modules"     %% "scala-parser-combinators"  % "1.0.6",
-    "org.typelevel"              %% "algebra-laws"              % algebraVersion                       % Test,
-    "co.fs2"                     %% "fs2-core"                  % fs2Version,
-    "co.fs2"                     %% "fs2-io"                    % fs2Version,
-    "co.fs2"                     %% "fs2-scalaz"                % fs2ScalazVersion,
-    "com.github.scopt"           %% "scopt"                     % scoptVersion,
-    "org.spire-math"             %% "jawn-parser"               % jawnVersion,
-    "com.github.scopt"           %% "scopt"                     % scoptVersion,
-    "org.jboss.aesh"              % "aesh"                      % "0.66.17",
-    "org.http4s"                 %% "http4s-dsl"                % http4sVersion,
-    "org.http4s"                 %% "http4s-argonaut"           % http4sVersion,
-    "org.http4s"                 %% "http4s-client"             % http4sVersion,
-    "org.http4s"                 %% "http4s-server"             % http4sVersion,
+  def lwcCore = Seq(
     "org.http4s"                 %% "http4s-scala-xml"          % http4sVersion,
-    "org.http4s"                 %% "http4s-blaze-server"       % http4sVersion,
     "org.http4s"                 %% "http4s-blaze-client"       % http4sVersion,
-    "eu.timepit"                 %% "refined-scalacheck"        % refinedVersion                       % Test,
-    "org.quasar-analytics"       %% "quasar-mimir-internal"     % quasarVersion,
     "org.scala-lang.modules"     %% "scala-xml"                 % scalaXmlVersion,
     "io.circe"                   %% "circe-jawn"                % circeJawnVersion
+  )
+
+  def lwc = lwcCore ++ Seq(
+    "org.quasar-analytics"       %% "quasar-mimir-internal"     % quasarVersion
   )
 
   def it = lwc ++ Seq(

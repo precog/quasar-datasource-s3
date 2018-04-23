@@ -1,4 +1,8 @@
 libraryDependencies += "org.kohsuke" % "github-api" % "1.59" exclude("org.jenkins-ci", "annotation-indexer")
+libraryDependencies ++= Seq(
+  "io.get-coursier" %% "coursier" % "1.0.1",
+  "io.get-coursier" %% "coursier-cache" % "1.0.1"
+)
 
 disablePlugins(TravisCiPlugin)
 
