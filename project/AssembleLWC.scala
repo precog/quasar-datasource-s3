@@ -12,43 +12,41 @@ import java.lang.Runtime
 
 import sbt.{MavenRepository => _, Cache => _, _}
 import sbt.Keys._
+import scalaz._, Scalaz._
 
 object AssembleLWC {
   val assembleLWC = TaskKey[Unit]("assembleLWC")
 
+  def moduleIdToDependency(moduleId: ModuleID): Dependency =
+    Dependency(Module(moduleId.organization, moduleId.name + "_2.12"), moduleId.revision)
+
   val setAssemblyKey =
     assembleLWC in Compile := {
-      val packaged = (sbt.Keys.`package` in Compile).value
-      val outPath = (crossTarget in Compile).value
-      val path = new File(outPath, "assembleLWC")
-      val lwcJarFolder = new File(path, "lwc")
-      path.mkdir()
+      val packagedJarFile = (sbt.Keys.`package` in Compile).value
+      val buildOutputFolder = (crossTarget in Compile).value
+      val lwcPiecesFolder = new File(buildOutputFolder, "lwcpieces")
+      val lwcJarFolder = new File(lwcPiecesFolder, "lwc")
+      lwcPiecesFolder.mkdir()
       lwcJarFolder.mkdir()
-      val start =
-        Resolution(
-          Dependencies.lwcCore.map(
-            moduleId => Dependency(Module(moduleId.organization, moduleId.name + "_2.12"), moduleId.revision)
-          ).toSet
-        )
-      val cache = Cache.fetch(path, CachePolicy.Update, Cache.defaultChecksums, None, Cache.defaultPool, Cache.defaultTtl)
-      val fetch = start.process.run(Fetch.from(
-        Seq(MavenRepository("https://repo1.maven.org/maven2")),
-        cache
-      )).unsafePerformSync
-      fetch.artifacts
-        .map(Cache.file(_, path, CachePolicy.Update, Cache.defaultChecksums, None, Cache.defaultPool, Cache.defaultTtl).run.unsafePerformSync)
-      val newLWCJarFile = new File(lwcJarFolder, packaged.name)
-      if (packaged.exists()) {
-        Files.move(packaged.toPath(), newLWCJarFile.toPath(), REPLACE_EXISTING)
-      }
+      val resolution =
+        Resolution(Dependencies.lwcCore.map(moduleIdToDependency).toSet)
+      val cache = Cache.fetch(lwcPiecesFolder, CachePolicy.Update, Cache.defaultChecksums, None, Cache.defaultPool, Cache.defaultTtl)
+      (for {
+        fetched <- resolution.process.run(Fetch.from(
+          Seq(MavenRepository("https://repo1.maven.org/maven2")),
+          cache))
+        artifacts <- fetched.artifacts.toList.traverse(Cache.file(_, lwcPiecesFolder, CachePolicy.Update, Cache.defaultChecksums, None, Cache.defaultPool, Cache.defaultTtl).run)
+      } yield artifacts.sequence[({type l[A] = FileError \/ A })#l, File]).unsafePerformSync
+      val newLWCJarFile = new File(lwcJarFolder, packagedJarFile.name)
+      Files.copy(packagedJarFile.toPath(), newLWCJarFile.toPath(), REPLACE_EXISTING)
       // println(s"mv $packaged $path/")
-      val pluginJarPath = path.toPath.relativize(newLWCJarFile.toPath).toString
-      val pluginFilePath = new File(path, "s3.plugin").toPath
+      val pluginJarPath = lwcPiecesFolder.toPath.relativize(newLWCJarFile.toPath).toString
+      val pluginFilePath = new File(lwcPiecesFolder, "s3.plugin").toPath
       // todo: replace with the results from `Cache.fetch`
-      val classPath = Files.walk(new File(path, "https").toPath)
+      val classPath = Files.walk(new File(lwcPiecesFolder, "https").toPath)
         .map[File](_.toFile)
         .filter { p => p.isFile && p.name.endsWith(".jar") }
-        .map[Path](p => path.toPath.relativize(p.toPath))
+        .map[Path](p => lwcPiecesFolder.toPath.relativize(p.toPath))
         .collect(Collectors.toList[Path])
         .asScala
 
@@ -60,10 +58,10 @@ object AssembleLWC {
       Files.deleteIfExists(pluginFilePath)
       Files.write(pluginFilePath, outJson.getBytes, CREATE_NEW, TRUNCATE_EXISTING)
 
-      val files = path.listFiles.map(p => path.toPath.relativize(p.toPath).toString).mkString(" ")
-      val tarPath = new File(outPath, "lwc.tar.gz")
+      val files = lwcPiecesFolder.listFiles.map(p => lwcPiecesFolder.toPath.relativize(p.toPath).toString).mkString(" ")
+      val tarPath = new File(buildOutputFolder, "lwc.tar.gz")
 
-      val cmd = s"tar -czvf $tarPath -C $path/ $files"
+      val cmd = s"tar -czvf $tarPath -C $lwcPiecesFolder/ $files"
 
       Runtime.getRuntime().exec(cmd)
     }
