@@ -7,10 +7,8 @@ import sbt._
 
 object Dependencies {
   private val http4sVersion       = "0.16.6a"
-  // For unknown reason sbt-slamdata's specsVersion, 3.8.7,
-  // leads to a ParquetRDDE failure under a full test run
   private val scalaXmlVersion     = "1.1.0"
-  private val circeJawnVersion     = "0.8.0"
+  private val circeJawnVersion    = "0.8.0"
 
   private val quasarVersion       = "38.2.3-f3f05e7"
 
