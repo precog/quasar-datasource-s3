@@ -86,46 +86,49 @@ object AssembleLWC {
           lwcJarFolder.mkdir()
         }
 
+        _ <- Task.delay(println("Fetching artifacts with coursier..."))
+
         // coursier prefers that we fetch metadata before fetching
         // artifacts. we do that in parallel with copying the lwc
         // jar to its new place, because they don't depend on one
         // another.
-        resolvedMetadata <-
+        fetchedJarFiles <-
           Parallel.unwrap(
             Applicative[ParallelTask].apply2(
               Parallel(
                 Task(Files.copy(packagedJarFile.toPath(), lwcJarFile.toPath(), REPLACE_EXISTING))
               ),
               Parallel(
-                resolution.process.run(
-                  // we don't use ~/.ivy2/local here because
-                  // I've heard that coursier doesn't copy
-                  // from local caches into other local caches.
-                  Fetch.from(Seq(MavenRepository("https://repo1.maven.org/maven2")), cache)
-                )
+                for {
+                  metadata <- resolution.process.run(
+                    // we don't use ~/.ivy2/local here because
+                    // I've heard that coursier doesn't copy
+                    // from local caches into other local caches.
+                    Fetch.from(Seq(MavenRepository("https://repo1.maven.org/maven2")), cache)
+                  )
+                  // fetch artifacts in parallel into cache
+                  artifactsPar = metadata.artifacts.toList
+                    .traverse[ParallelTask, FileError \/ File] { f =>
+                      Parallel(Cache.file(f, lwcPluginsFolder, CachePolicy.Update).run)
+                    }
+
+                  // some contortions to make sure *all* errors
+                  // are reported when any fail to download.
+                  artifacts <- Parallel.unwrap(artifactsPar)
+                    .flatMap(_.traverse[OrFileErrors, File](_.validationNel).fold(
+                      es => Task.fail(new Exception(s"Failed to fetch files: ${es.foldMap(e => e.toString + "\n\n")}")),
+                      Task.now(_)
+                    ))
+
+                  // filter out coursier metadata, we only want the jars
+                  // for the `classpath` field of the .plugin file
+                  jarFiles <- artifacts.filter(_.name.endsWith(".jar")).pure[Task]
+                } yield jarFiles
               )
-            )((_, res) => res)
+            )((_, jars) => jars)
           )
 
-        _ <- Task.delay(println("Metadata resolved. Fetching artifacts..."))
-
-        // fetch all artifacts into the cache. there's
-        // some contortions made to make sure *all* errors
-        // are reported when any fail to download.
-        fetchedArtifacts <-
-          resolvedMetadata.artifacts.toList
-            .traverse(
-              Cache.file(_, lwcPluginsFolder, CachePolicy.Update).run
-            )
-            .flatMap(_.traverse[OrFileErrors, File](_.validationNel).fold(
-              es => Task.fail(new Exception(s"Failed to fetch files: ${es.foldMap(e => e.toString + "\n\n")}")),
-              Task.now(_)
-            ))
         _ <- Task.delay(println("Artifacts fetched. Preparing to write .plugin file..."))
-
-        // filter out coursier metadata, we only want the jars
-        // for the `classpath` field of the .plugin file
-        fetchedJarFiles <- fetchedArtifacts.filter(_.name.endsWith(".jar")).pure[Task]
 
         // the .plugin file requires all dependency jar paths
         // to be relative to the plugins folder
