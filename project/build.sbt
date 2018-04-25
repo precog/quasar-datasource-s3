@@ -1,11 +1,14 @@
 libraryDependencies += "org.kohsuke" % "github-api" % "1.59" exclude("org.jenkins-ci", "annotation-indexer")
+
+// used to fetch dependencies to form a coursier cache,
+// for packaging the LWC.
+// should remain the newest coursier version.
 libraryDependencies ++= Seq(
   "io.get-coursier" %% "coursier" % "1.0.1",
   "io.get-coursier" %% "coursier-cache" % "1.0.1"
 )
 
-disablePlugins(TravisCiPlugin)
-
+// slamdata-predef things
 scalacOptions ++= scalacOptions_2_12
 
 scalacOptions --= Seq(
