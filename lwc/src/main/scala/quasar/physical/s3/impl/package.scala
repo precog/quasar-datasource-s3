@@ -17,5 +17,8 @@
 package quasar.physical.s3
 
 package object impl {
+  // this type comes up too many times to write out myself.
+  // scala.Any is better than `_` here because existentials
+  // are broken
   private type APath = pathy.Path[pathy.Path.Abs, scala.Any, pathy.Path.Sandboxed]
 }

@@ -15,15 +15,17 @@
  */
 
 // from circe/circe-fs2 0.9.1
+// this can be removed in favor of circe-fs2 once we update
+// jawn to 0.11.0 in quasar.
 
 package quasar.physical.s3
 
 import slamdata.Predef.{Seq => _, _}
 import scala.collection.Seq
 
-import _root_.fs2.{ Chunk, Pipe, Stream }
-import _root_.fs2.pipe
-import _root_.jawn.{ AsyncParser, ParseException }
+import fs2.{ Chunk, Pipe, Stream }
+import fs2.pipe
+import jawn.{ AsyncParser, ParseException }
 import io.circe.{Decoder, Json}
 import io.circe.jawn.CirceSupportParser
 

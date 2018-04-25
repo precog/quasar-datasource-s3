@@ -198,6 +198,16 @@ lazy val repl = project
   .settings(githubReleaseSettings)
   .settings(targetSettings)
   .settings(excludeTypelevelScalaLibrary)
+  .settings(
+    console := (console in Test).value,
+    scalacOptions --= Seq("-Yno-imports", "-Ywarn-unused:imports", "-Xfatal-warnings"),
+    initialCommands in console += """
+    |import quasar.physical.s3._
+    |import quasar.fs.mount._
+    |import pathy.Path
+    |import scalaz._, Scalaz._, scalaz.concurrent.Task
+    """.stripMargin.trim
+  )
   .enablePlugins(AutomateHeaderPlugin)
 
 /** S3-specific integration tests

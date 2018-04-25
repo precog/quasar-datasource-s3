@@ -38,7 +38,6 @@ object S3JsonParsing {
 }
 
 final class S3LWC(jsonParsing: S3JsonParsing) extends LightweightConnector {
-
   // the only thing we need to do to set up a new S3
   // connector is validate the `ConnectionUri` as a real URI,
   // and create an http4s client
