@@ -26,10 +26,10 @@ import scalaz.stream.Process
 import scala.language.higherKinds
 import scalaz.{-\/, \/, \/-}
 
-// the code below was adapted from a gist originally written by Pavel Chlupacek (@pchlupacek on github)
-// and shared with the community as https://gist.github.com/pchlupacek/989a2801036a9441da252726a1b4972d
+// The code below was adapted from a gist originally written by Pavel Chlupacek (@pchlupacek on github)
+// and shared with the community as https://gist.github.com/pchlupacek/989a2801036a9441da252726a1b4972d.
+// It converts between fs2 0.9 `Stream` and scalaz-stream `Process`.
 private[s3] object fs2Conversion {
-
 
   def processToFs2[A](in:Process[Task,A]):Stream[Task,A] = Stream.suspend {
     import impl._

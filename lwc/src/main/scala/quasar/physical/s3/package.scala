@@ -20,7 +20,8 @@ import scalaz.concurrent.Task
 
 package object s3 {
 
-  // for fs2/scalaz interop, may be replaceable with fs2-scalaz
+  // This is for fs2/scalaz interop.
+  // It may be replaceable with fs2-scalaz.
   implicit val fs2MonadTask: fs2.util.Monad[Task] = new fs2.util.Monad[Task] {
     def flatMap[A, B](a: Task[A])(f: A => Task[B]): Task[B] = a.flatMap(f)
     def pure[A](a: A): Task[A] = Task.now(a)

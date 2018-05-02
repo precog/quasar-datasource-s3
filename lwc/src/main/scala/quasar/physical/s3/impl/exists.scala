@@ -24,21 +24,23 @@ import pathy.Path
 import quasar.contrib.pathy._
 import scalaz.concurrent.Task
 
-// the simplest method to implement, just need to check that
-// HEAD doesn't give a 404.
+// The simplest method to implement, check that HEAD doesn't
+// give a 404.
 object exists {
   def apply(client: Client, uri: Uri, file: AFile): Task[Boolean] = {
-    // print pathy.Path as POSIX path, without leading slash
+    // Print pathy.Path as POSIX path, without leading slash,
+    // for S3's consumption.
     val objectPath = Path.posixCodec.printPath(file).drop(1)
 
-    // just request to the object's path on the bucket
+    // Add the object's path to the bucket URI.
     val queryUri = uri / objectPath
 
-    // with HEAD, to get metadata
+    // Request with HEAD, to get metadata.
     val request = Request(uri = queryUri, method = Method.HEAD)
 
+    // Don't use the metadata, just check if the request
+    // returns a 404.
     client.status(request).flatMap {
-      // self-explanatory.
       case Status.Ok => Task.now(true)
       case Status.NotFound => Task.now(false)
       case s => Task.fail(new Exception(s"Unexpected status returned during `exists` call: $s"))

@@ -32,10 +32,11 @@ import scalaz.syntax.std.boolean._
 import scalaz.syntax.std.option._
 import scalaz.syntax.traverse._
 
-object children {
-  private def aPathToObjectPrefix(apath: APath): Option[String] = {
-    // don't provide prefix if listing the top-level,
-    // otherwise drop the first /
+object children { private def aPathToObjectPrefix(apath: APath): Option[String] = {
+    // Don't provide an object prefix if listing the
+    // entire bucket. Otherwise, we have to drop
+    // the first `/`, because object prefixes can't
+    // begin with `/`.
     (apath != Path.rootDir).option {
       Path.posixCodec.printPath(apath).drop(1) // .replace("/", "%2F")
     }
@@ -43,9 +44,9 @@ object children {
 
   private def s3NameToPath(name: String): Option[APath] = {
     val unsandboxed: Option[Path[Path.Abs, Any, Path.Unsandboxed]] =
-      // parse S3 object paths as POSIX paths with a missing
-      // slash at the beginning. relative paths are disallowed
-      // by the `_ => none` cases
+      // Parse S3 object paths as POSIX paths with a missing
+      // slash at the beginning. Relative paths are disallowed
+      // by the `_ => none` cases.
       Path.posixCodec.parsePath(
         _ => none,
         _.some,
@@ -53,27 +54,26 @@ object children {
         _.some
       )("/" + name)
     // unsafeSandboxAbs is from quasar.
-    // posixCodec parses unsandboxed ("real") paths
+    // `posixCodec` parses unsandboxed ("real") paths;
+    // we don't use them here.
     unsandboxed.map(unsafeSandboxAbs)
   }
 
-  // I'm sick of writing `opt.fold(a)(f(a, _)). you can
-  // interpret this as converting an `Option[A]` to a
-  // `B => B` using a "combiner" function (B, A) => B
+  // Interpret this as converting an `Option[A]` to a
+  // `B => B` using a "combiner" function (B, A) => B.
   implicit private final class optApplyOps[B](self: B) {
     def >+>[A](opt: Option[A], f: (B, A) => B): B = opt.fold(self)(f(self, _))
   }
 
   // S3 provides a recursive listing (akin to `find` or
   // `dirtree`); we filter out children that aren't direct
-  // children. we can only list 1000 keys, and need pagination
-  // to do more. that's 1000 *recursively listed* keys, so we
+  // children. We can only list 1000 keys, and need pagination
+  // to do more. That's 1000 *recursively listed* keys, so we
   // could conceivably list *none* of the direct children of a
   // folder without pagination, depending on the order AWS
   // sends them in.
   def apply(client: Client, uri: Uri, dir: ADir): Task[Option[Set[PathSegment]]] = {
-    // self-explanatory, converts a pathy Path to an S3
-    // object prefix.
+    // Converts a pathy Path to an S3 object prefix.
     val objectPrefix = aPathToObjectPrefix(dir)
 
     // Start with the bucket URI; add an extra `/` on the end
@@ -86,12 +86,12 @@ object children {
       (objectPrefix, _ +? ("prefix", _))
 
       for {
-        // request to S3, parse the response as XML.
+        // Send request to S3, parse the response as XML.
         topLevelElem <- client.expect[xml.Elem](queryUri)
-        // grab the child names from the response
+        // Grab child object names from the response.
         children <- for {
           contents <- Task.suspend {
-            // grab <Contents>
+            // Grab <Contents>.
             try {
               Task.now(topLevelElem \\ "Contents")
             } catch {
@@ -99,7 +99,7 @@ object children {
                 Task.fail(new Exception("XML received from AWS API has no top-level <Contents> element", ex))
             }
           }
-          // grab all of the <Key> elements from <Contents>
+          // Grab all of the <Key> elements from <Contents>.
           names <- contents.toList.traverse { elem =>
             try {
               Task.now((elem \\ "Key").text)
@@ -109,10 +109,10 @@ object children {
             }
           }
         } yield names
-        // convert S3 object names to paths
+        // Convert S3 object names to paths.
         childPaths <- children.traverse(s3NameToPath)
           .cata(Task.now, Task.fail(new Exception(s"Failed to parse object path in S3 API response")))
-        // deal with some S3 idiosyncrasies.
+        // Deal with some S3 idiosyncrasies.
         // TODO: Pagination
         result =
         if (dir =/= Path.rootDir && !childPaths.element(dir)) None
@@ -121,14 +121,16 @@ object children {
             .filter(path =>
               // AWS includes the folder itself in the returned
               // results, so we have to remove it.
-              // same goes for files in folders *below* the listed folder.
+              // The same goes for files in folders *below*
+              // the listed folder.
               path =/= dir && Path.parentDir(path) === Some(dir))
-            // take the file name or folder name of the
-            // child out of the full object path
-            // TODO: report an error when `Path.peel` fails, that's nonsense
+            // Take the file name or folder name of the
+            // child out of the full object path.
+            // TODO: Report an error when `Path.peel` fails,
+            // that's nonsense.
             .flatMap(Path.peel(_).toList)
-            // remove duplicates
-            // TODO: report an error if there are duplicates
+            // Remove duplicates.
+            // TODO: Report an error if there are duplicates.
             .map(_._2).toSet)
       } yield result
   }

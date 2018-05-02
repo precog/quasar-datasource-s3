@@ -30,7 +30,7 @@ import scalaz.concurrent.Task
 
 sealed trait S3JsonParsing
 
-// two ways to parse JSON that we offer: as an array of rows,
+// Two ways to parse JSON that we offer: as an array of rows,
 // or as rows delimited by newlines.
 object S3JsonParsing {
   case object JsonArray extends S3JsonParsing
@@ -38,9 +38,9 @@ object S3JsonParsing {
 }
 
 final class S3LWC(jsonParsing: S3JsonParsing) extends LightweightConnector {
-  // the only thing we need to do to set up a new S3
-  // connector is validate the `ConnectionUri` as a real URI,
-  // and create an http4s client
+  // To set up a new S3 filesystem we validate the
+  // `ConnectionUri` as a real URI, and create an http
+  // client to use to contact S3.
   def init(uri: ConnectionUri): EitherT[Task, String, (LightweightFileSystem, Task[Unit])] =
     EitherT(Task.suspend {
       val httpUri = Uri.fromString(uri.value)
@@ -54,8 +54,8 @@ final class S3LWC(jsonParsing: S3JsonParsing) extends LightweightConnector {
     })
 }
 
-// objects extending SlamDB are the interface to the
-// lightweight connector system. we have two, one for
+// Objects extending SlamDB are the interface to the
+// lightweight connector system. We have two, one for
 // array-based JSON, one for line-delimited JSON.
 object S3JsonArray extends SlamDB {
   // FileSystemType("s3array") means that to add a mount under
@@ -66,7 +66,7 @@ object S3JsonArray extends SlamDB {
   val lwc: LightweightConnector = new S3LWC(S3JsonParsing.JsonArray)
 }
 
-// the exact same as the above, but with line-delimited JSON
+// The exact same as the above, but with line-delimited JSON
 // parsing.
 object S3LineDelimited extends SlamDB {
   val Type: FileSystemType = FileSystemType("s3linedelim")

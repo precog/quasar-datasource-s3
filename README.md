@@ -1,10 +1,10 @@
 # Quasar S3 Connector
 
 A connector for the Quasar open source analytics engine, that
-provides it with access to Amazon S3.
+provides access to Amazon S3.
 
-Also the place where we document the process of creating
-lightweight connectors for quasar.
+Also documents how to create a lightweight connector for
+quasar.
 
 ## The API
 
@@ -24,31 +24,30 @@ which provides the filesystem operations that Quasar relies on.
 2. The lightweight connector API (`LightweightConnector`) which
 provides lightweight filesystems when configured.
 
-For S3, you can think about each filesystem as being a bucket,
-and each connector as providing filesystems for each bucket URI
-you give it.
+For S3, you can think of each filesystem as a bucket, and
+each connector as associating a bucket's URI with the bucket
+itself.
 
 ### Lightweight Filesystems
 
 Lightweight filesystems are similar to everyday filesystems.
-They have notions of "path", "folder" and "file", which mean
-the exact same thing they usually do. We use `scala-pathy`
-to represent our paths, so we can have separate types for
-file paths and folder paths.
+They have notions of "path", "folder" and "file" which are
+analogous to paths, folders and files on your local
+filesystem. We use `scala-pathy` to represent paths, which
+provides separate types for file paths and folder paths.
 
 Lightweight filesystems provide three operations:
 - `children`
 - `read`
 - `exists`
 
-`children` is comparable to POSIX `ls`, it lists the files and
-folders in a directory.
+`children` is comparable to POSIX `ls`, and Windows `dir`; it
+lists the files and folders in a directory.
 
 `read` is comparable to POSIX `cat`, except that it reads files
 as JSON rather than plain text.
 
-`exists` does exactly what it says on the tin; though it's
-typed to only work on files and not directories.
+`exists` checks if a file exists on a filesystem.
 
 ### Lightweight Connectors
 
