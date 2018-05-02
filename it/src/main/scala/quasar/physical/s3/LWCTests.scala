@@ -27,73 +27,186 @@ import scalaz._, Scalaz._
 import scalaz.concurrent.Task
 
 final case class TestFS(
-  uri: ConnectionUri,
   // map from file paths to JSON data;
   // if the file exists but is not parseable
   // it's `None`
   allFiles: Map[AFile, Option[List[Data]]],
   // full directory structure
-  allPaths: Map[ADir, List[AFile \/ ADir]]
+  allPaths: Map[ADir, List[APath]]
 )
 
-final case class MultiCauseException(val msg: Option[String], val causes: List[Throwable]) extends Exception (
-)
+final case class MultiCauseException(val msg: Option[String], val causes: List[Throwable]) extends Exception
 
-final class LWCTests {
+object LWCTests {
 
   type T = Task[Unit]
 
   def main(args: Array[String]) = {
+    val testDir: ADir = Path.rootDir </> Path.dir("testData")
+    val testUri: ConnectionUri = ConnectionUri("http://s3-lwc-test.s3.amazonaws.com")
+    val testArrayObject: AFile = testDir </> Path.file("array.json")
+    val testLineObject: AFile = testDir </> Path.file("lines.json")
+
+    val lineData = TestFS(
+      Map(
+        testArrayObject -> Some(List(Data.Arr(List(
+          Data.Arr(List(Data.Int(1), Data.Int(2))),
+          Data.Arr(List(Data.Int(3), Data.Int(4))))))),
+        testLineObject -> Some(List(
+          Data.Arr(List(Data.Int(1), Data.Int(2))),
+          Data.Arr(List(Data.Int(3), Data.Int(4)))))
+      ),
+      Map(
+        Path.rootDir -> List(testDir),
+        testDir -> List(testArrayObject, testLineObject)
+      )
+    )
+
+    val arrData = TestFS(
+      Map(
+        testArrayObject -> Some(List(
+          Data.Arr(List(Data.Int(1), Data.Int(2))),
+          Data.Arr(List(Data.Int(3), Data.Int(4))))),
+        testLineObject -> None
+      ),
+      Map(
+        Path.rootDir -> List(testDir),
+        testDir -> List(testArrayObject, testLineObject)
+      )
+    )
+
     (for {
       arrLwfsE <- S3JsonArray.lwc.init(testUri).run
       \/-((arrLwfs, _)) = arrLwfsE
+      arrR = testLaws("Array", arrLwfs, arrData)
       lineLwfsE <- S3LineDelimited.lwc.init(testUri).run
       \/-((lineLwfs, _)) = lineLwfsE
-      arrR = testLaws(arrLwfs, arrData)
-      lineR = testLaws(lineLwfs, lineData)
-      _ <- gather(List(arrR, lineR))
+      lineR = testLaws("Line", lineLwfs, lineData)
+      _ <- gather(List(arrR, lineR), none).attempt.flatMap {
+        case -\/(ex) =>
+          Task.delay(println(showThrowable(ex, 0)))
+        case \/-(_) =>
+          Task.delay(println("tests successful!"))
+      }
     } yield ()).unsafePerformSync
   }
 
-  def testDir: ADir = Path.rootDir </> Path.dir("testData")
-  def testUri: ConnectionUri = ConnectionUri("http://slamdata-test-public")
-  def testArrayObject: AFile = testDir </> Path.file("array.json")
-  def testLineObject: AFile = testDir </> Path.file("lines.json")
+  def makeTestFS(lwfs: LightweightFileSystem): Task[TestFS] = {
+    @SuppressWarnings(Array("org.wartremover.warts.Recursion"))
+    def findPaths(root: ADir): Task[List[(ADir, List[APath])]] =
+      lwfs.children(root).flatMap {
+        case None =>
+          Task.fail(new Exception(
+            s"children call failed on ${Path.posixCodec.printPath(root)}"
+          ))
+        case Some(childs) =>
+          def absolutize(root: ADir, seg: PathSegment): APath =
+            root </>
+              seg.fold({ case Path.DirName(n)  => Path.dir(n) },
+                       { case Path.FileName(n) => Path.file(n) })
+          val absoluteChilds = childs.map(absolutize(root, _)).toList
+          val newPair = (root, absoluteChilds)
+          val recChilds = absoluteChilds.map(Path.refineType).toList.collect {
+            case -\/(dir) => dir
+          }
+          recChilds.traverseM(findPaths).map(newPair :: _)
+      }
 
-  val lineData = TestFS(
-    testUri,
-    Map(
-      testArrayObject -> Some(List(Data.Arr(List(Data.Arr(List(Data.Str("array"))))))),
-      testLineObject -> Some(List(Data.Arr(List(Data.Str("lines")))))
-    ),
-    Map(
-      Path.rootDir -> List(testDir.right[AFile]),
-      testDir -> List(testArrayObject.left[ADir], testLineObject.left[ADir])
-    )
-  )
+    def readFiles(paths: Map[ADir, List[APath]]): Task[List[(AFile, Option[List[Data]])]] = {
+      val files =
+        paths.values
+          .flatMap(x => x)
+          .flatMap(
+            Path.refineType(_) match {
+              case \/-(f) =>
+                f :: Nil
+              case _ =>
+                Nil
+            }
+          )
+          .toList
 
-  val arrData = TestFS(
-    testUri,
-    Map(
-      testArrayObject -> Some(List(Data.Arr(List(Data.Str("array"))))),
-      testLineObject -> None
-    ),
-    Map(
-      Path.rootDir -> List(testDir.right[AFile]),
-      testDir -> List(testArrayObject.left[ADir], testLineObject.left[ADir])
-    )
-  )
+      gather(files.map(file =>
+        lwfs.read(file).attempt.flatMap {
+          case -\/(ex) =>
+            Task.fail(new Exception(
+              s"Exception occurred while reading $file:\n${showThrowable(ex, 0)}"
+            ))
+          case \/-(None) =>
+            Task.fail(new Exception(
+              s"File $file is not readable."
+            ))
+          case \/-(Some(contentStream)) =>
+            contentStream.runLog.map(_.toList).attempt.map {
+              case -\/(_) => (file, none)
+              case \/-(r) => (file, r.some)
+            }
+        }
+      ), none)
+    }
 
-  def traverseL[F[_]: Traverse, G[_]: Applicative, A, B]
-    (as: F[A])
-    (f: A => G[B])
-  : G[F[(A, B)]] =
-    as.traverse(a =>
-      f(a).strengthL(a)
-    )
+    for {
+      paths <- findPaths(Path.rootDir)
+      pathsMap = paths.toMap
+      files <- readFiles(pathsMap)
+    } yield TestFS(files.toMap, pathsMap)
+  }
+
+  def checkFS(expected: TestFS, actual: TestFS): T = {
+    val checkSamePaths: T = {
+      val extra = actual.allPaths.keySet -- expected.allPaths.keySet
+      val missing = expected.allPaths.keySet -- actual.allPaths.keySet
+      val missingErr = if (missing.nonEmpty) {
+        Task.fail(new Exception(
+          s"""Some unexpected files were present on the filesystem:
+          |${missing.map("  " + _.shows).mkString("\n")}
+          """
+        ))
+      } else Task.now(())
+      val extraErr = if (extra.nonEmpty) {
+        Task.fail(new Exception(
+          s"""Some unexpected files were present on the filesystem:
+          |${missing.map("  " + _.shows).mkString("\n")}
+          """
+        ))
+      } else Task.now(())
+      gather(List(missingErr, extraErr), none).void
+    }
+
+    val checkSameFileContents: T = {
+      val sharedFiles = expected.allFiles.keySet & actual.allFiles.keySet
+      gather(sharedFiles.toList.map {
+        file =>
+          (expected.allFiles(file), actual.allFiles(file)) match {
+            case (Some(expectedData), Some(actualData))
+            if expectedData === actualData =>
+              Task.now(())
+            case (None, None) => Task.now(())
+            case (Some(_), None) => Task.fail(new Exception(
+              s"No valid data was found at $file"
+            ))
+            case (None, Some(_)) => Task.fail(new Exception(
+              s"Unexpectedly valid data was found at $file"
+            ))
+            case (Some(expectedData), Some(actualData)) =>
+              Task.fail(new Exception(
+                s"""Incorrect data was present at $file;
+                |Actual:
+                |${actualData.shows}
+                |Expected:
+                |${expectedData.shows}
+                """.stripMargin.trim
+              ))
+          }
+      }, none).void
+    }
+
+    gather(List(checkSamePaths, checkSameFileContents), "Check filesystem".some).void
+  }
 
   @SuppressWarnings(Array("org.wartremover.warts.Recursion"))
-  def showThrowable(ex: Throwable): String = {
+  def showThrowable(ex: Throwable, indent: Int): String = {
+    @SuppressWarnings(Array("org.wartremover.warts.Recursion"))
     def flatten(th: Throwable): List[Throwable] \/ Throwable = th match {
       case MultiCauseException(Some(msg), causes) =>
         \/-(MultiCauseException(Some(msg), causes.flatMap { c =>
@@ -116,104 +229,63 @@ final class LWCTests {
         th
     }
 
-    import java.io.StringWriter
-    import java.io.PrintWriter
-
-    val sw = new StringWriter()
-    val pw = new PrintWriter(sw)
-    newEx.printStackTrace(pw)
-    (newEx match {
+    val myIndent = "  " * indent
+    newEx match {
       case MultiCauseException(msg, causes) =>
         s"""
-        |Errors occurred while testing:
-        |${causes.map(showThrowable).intercalate("\n")}
-        """.stripMargin.trim
-      case _ =>
-        ""
-    }) + sw.toString
+        |[${msg.fold("")(s"\n$myIndent(" + _ + ")")}
+        |${causes.map(showThrowable(_, indent + 1)).intercalate("\n")}
+        |]
+        """.stripMargin.trim + "\n"
+      case ex =>
+        myIndent + ex.toString
+    }
   }
 
-  def gather[F[_]: Traverse, A](tasks: F[Task[A]]): Task[F[A]] = {
+  def gather[F[_]: Traverse, A](tasks: F[Task[A]], msg: Option[String]): Task[F[A]] = {
     val attempted: Task[F[Throwable \/ A]] = tasks.traverse(_.attempt)
     val validated: Task[Throwable ValidationNel F[A]] = attempted.map(_.traverse(_.validationNel[Throwable]))
     validated.flatMap {
       case Failure(es) =>
-        Task.fail(MultiCauseException(None, es.list.toList))
+        Task.fail(MultiCauseException(msg, es.list.toList))
       case Success(fa) =>
         Task.now(fa)
     }
   }
 
-  def testLaws(lwfs: LightweightFileSystem, fs: TestFS): T = for {
-    _ <- existTests(lwfs, fs)
-    _ <- Task.now(())
-  } yield ()
+  def testLaws(name: String, lwfs: LightweightFileSystem, expectedFS: TestFS): T =
+    gather(List(existTests(lwfs, expectedFS), for {
+      actualFS <- makeTestFS(lwfs)
+      _ <- checkFS(expectedFS, actualFS)
+    } yield ()), name.some).void
 
   def existTests(lwfs: LightweightFileSystem, fs: TestFS): T = fs match {
-    case TestFS(_, files, paths) =>
+    case TestFS(files, paths) =>
       val allFiles: List[AFile] =
         paths
           .values
           .flatMap(x => x)
           .flatMap {
-            case -\/(f) =>
-              f :: Nil
-            case _ =>
-              Nil
+            Path.refineType(_) match {
+              case \/-(f) =>
+                f :: Nil
+              case _ =>
+                Nil
+            }
           }
           .toList
       mustExist(allFiles, lwfs)
   }
 
-  def mustExist(paths: List[AFile], lwfs: LightweightFileSystem): T = for {
-    exists <- traverseL(paths)(lwfs.exists)
-    _ <- gather(exists.map {
-      case (file, doesExist) =>
+  def mustExist(paths: List[AFile], lwfs: LightweightFileSystem): T =
+    gather(paths.map { file =>
+      lwfs.exists(file).flatMap { doesExist =>
         if (!doesExist)
           Task.fail(new Exception(
-            "File $file does not exist despite being listed in the children of $path"
+            s"File $file does not exist"
           ))
         else Task.now(())
-    })
-  } yield ()
-
-  def existsChildrenLaw(path: ADir, lwfs: LightweightFileSystem): T = for {
-    childrenErr <- lwfs.children(path)
-    children <- childrenErr
-      .cata(Task.now, Task.fail(new Exception("Folder does not exist")))
-    files = children.toList.collect {
-      case \/-(Path.FileName(file)) => path </> Path.file(file)
-    }
-    _ <- mustExist(files, lwfs)
-  } yield ()
-
-  def reconstructChildren(path: ADir, lwfs: LightweightFileSystem): Task[List[ADir \/ AFile]] = for {
-    childrenErr <- lwfs.children(path)
-    children <- childrenErr
-      .cata(Task.now, Task.fail(new Exception("Folder does not exist")))
-    reconstructed = children.toList.map(_.bimap({
-      case Path.DirName(dir) => path </> Path.dir(dir)
-    }, {
-      case Path.FileName(file) => path </> Path.file(file)
-    }))
-  } yield reconstructed
-
-  def readChildrenLaw(path: ADir, lwfs: LightweightFileSystem): T = for {
-    children <- reconstructChildren(path, lwfs)
-    files = children.collect {
-      case \/-(file) => file
-    }
-    reads <- traverseL(files)(lwfs.read)
-    _ <- reads.traverse {
-      case (file, contentStream) =>
-        if (contentStream.isEmpty)
-          Validation.failureNel(new Exception(
-            "File $file is not readable despite being listed in the children of $path"
-          ))
-        else
-          Validation.success(())
-    }.fold(es => Task.fail(new Exception("""Errors: ${es.mkString("\n")}""")),
-           _ => Task.now(()))
-  } yield ()
+      }
+    }, "File existence".some).void
 
 }

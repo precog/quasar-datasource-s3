@@ -16,14 +16,19 @@
 
 package quasar.physical
 
+import slamdata.Predef._
+
 import scalaz.concurrent.Task
 
 package object s3 {
 
   // This is for fs2/scalaz interop.
   // It may be replaceable with fs2-scalaz.
-  implicit val fs2MonadTask: fs2.util.Monad[Task] = new fs2.util.Monad[Task] {
+  implicit val fs2CatchableTask: fs2.util.Catchable[Task] = new fs2.util.Catchable[Task] {
+    def attempt[A](fa: Task[A]): Task[fs2.util.Attempt[A]] = fa.attempt.map(_.toEither)
     def flatMap[A, B](a: Task[A])(f: A => Task[B]): Task[B] = a.flatMap(f)
     def pure[A](a: A): Task[A] = Task.now(a)
+    def fail[A](err: Throwable): Task[A] = Task.fail(err)
   }
+
 }
