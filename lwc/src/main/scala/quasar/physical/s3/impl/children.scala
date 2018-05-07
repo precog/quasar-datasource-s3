@@ -58,7 +58,7 @@ object children {
   // Interpret this as converting an `Option[A]` to a
   // `B => B` using a "combiner" function (B, A) => B.
   implicit private final class optApplyOps[B](self: B) {
-    def >+>[A](opt: Option[A], f: (B, A) => B): B = opt.fold(self)(f(self, _))
+    def >+[A](opt: Option[A], f: (B, A) => B): B = opt.fold(self)(f(self, _))
   }
 
   // S3 provides a recursive listing (akin to `find` or
@@ -78,9 +78,10 @@ object children {
     // `list-type=2` asks for the new version of the list api.
     // We only add the `objectPrefix` if it's not empty;
     // the S3 API doesn't understand empty `prefix`.
-    val queryUri = ((uri / "") +?
-      ("list-type", 2)) >+>[String]
-      (objectPrefix, _ +? ("prefix", _))
+    val queryUri = (uri / "") +?
+      ("list-type", 2) >+[String]
+      (objectPrefix, _ +? ("prefix", _)) >+[String]
+      (paginationToken, _ +? ("continuation-token", _))
 
       for {
         // Send request to S3, parse the response as XML.
