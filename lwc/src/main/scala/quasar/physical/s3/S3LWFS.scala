@@ -34,7 +34,7 @@ final class S3LWFS(jsonParsing: S3JsonParsing, uri: Uri, client: Client) extends
   // S3 object names roughly follow the POSIX
   // folder1/folder2/file path format, which makes this
   // function's implementation fairly natural.
-  def children(dir: ADir): Task[Option[Set[PathSegment]]] = impl.children(client, uri, dir)
+  def children(dir: ADir): Task[Option[Set[PathSegment]]] = impl.children(client, uri, dir, None)
 
   // Reads from an S3 object containing JSON, which is parsed
   // according to `jsonParsing`. streams results back.

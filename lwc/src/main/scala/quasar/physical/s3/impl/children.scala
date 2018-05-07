@@ -25,14 +25,10 @@ import pathy.Path
 import quasar.contrib.pathy._
 import scala.xml
 import scalaz.concurrent.Task
-import scalaz.std.option._
-import scalaz.std.list._
-import scalaz.syntax.equal._
-import scalaz.syntax.std.boolean._
-import scalaz.syntax.std.option._
-import scalaz.syntax.traverse._
+import scalaz.Scalaz._
 
-object children { private def aPathToObjectPrefix(apath: APath): Option[String] = {
+object children {
+  private def aPathToObjectPrefix(apath: APath): Option[String] = {
     // Don't provide an object prefix if listing the
     // entire bucket. Otherwise, we have to drop
     // the first `/`, because object prefixes can't
@@ -72,7 +68,8 @@ object children { private def aPathToObjectPrefix(apath: APath): Option[String] 
   // could conceivably list *none* of the direct children of a
   // folder without pagination, depending on the order AWS
   // sends them in.
-  def apply(client: Client, uri: Uri, dir: ADir): Task[Option[Set[PathSegment]]] = {
+  @SuppressWarnings(Array("org.wartremover.warts.Recursion"))
+  def apply(client: Client, uri: Uri, dir: ADir, paginationToken: Option[String]): Task[Option[Set[PathSegment]]] = {
     // Converts a pathy Path to an S3 object prefix.
     val objectPrefix = aPathToObjectPrefix(dir)
 
@@ -123,7 +120,12 @@ object children { private def aPathToObjectPrefix(apath: APath): Option[String] 
             // Remove duplicates.
             // TODO: Report an error if there are duplicates.
             .map(_._2).toSet)
-      } yield result
+        nextResults <- if ((topLevelElem \\ "IsTruncated").text === "true") {
+          val token = (topLevelElem \\ "NextContinuationToken").text
+          apply(client, uri, dir, Some(token))
+        } else Task.now(Some(Set.empty))
+
+      } yield ^(result, nextResults)(_ ++ _)
   }
 
 }
