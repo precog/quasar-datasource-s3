@@ -92,22 +92,13 @@ object children { private def aPathToObjectPrefix(apath: APath): Option[String] 
         children <- for {
           contents <- Task.suspend {
             // Grab <Contents>.
-            try {
-              Task.now(topLevelElem \\ "Contents")
-            } catch {
-              case ex: Exception =>
-                Task.fail(new Exception("XML received from AWS API has no top-level <Contents> element", ex))
-            }
+            (topLevelElem \\ "Contents").headOption.fold[Task[xml.Node]](
+              Task.fail(new Exception("XML received from AWS API has no top-level <Contents> element"))
+            )(Task.now)
           }
-          // Grab all of the <Key> elements from <Contents>.
-          names <- contents.toList.traverse { elem =>
-            try {
-              Task.now((elem \\ "Key").text)
-            } catch {
-              case ex: Exception =>
-                Task.fail(new Exception("XML received from AWS API has no <Key> elements under <Contents>", ex))
-            }
-          }
+          // Grab all of the text inside the <Key> elements
+          // from <Contents>.
+          names = contents.toList.map { e => (e \\ "Key").text }
         } yield names
         // Convert S3 object names to paths.
         childPaths <- children.traverse(s3NameToPath)
