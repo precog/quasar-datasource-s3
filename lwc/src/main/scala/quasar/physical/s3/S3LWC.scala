@@ -18,7 +18,7 @@ package quasar.physical.s3
 
 import quasar.fs.FileSystemType
 import quasar.fs.mount.ConnectionUri
-import quasar.mimir.{LightweightConnector, LightweightFileSystem, SlamDB}
+import quasar.mimir.{LightweightConnector, LightweightFileSystem, SlamEngine}
 import slamdata.Predef._
 
 import org.http4s.client.blaze.PooledHttp1Client
@@ -54,10 +54,10 @@ final class S3LWC(jsonParsing: S3JsonParsing) extends LightweightConnector {
     })
 }
 
-// Objects extending SlamDB are the interface to the
+// Objects extending SlamEngine are the interface to the
 // lightweight connector system. We have two, one for
 // array-based JSON, one for line-delimited JSON.
-object S3JsonArray extends SlamDB {
+object S3JsonArray extends SlamEngine {
   // FileSystemType("s3array") means that to add a mount under
   // this connector, they can set the mount key (in the JSON
   // sent) to "s3array"
@@ -68,7 +68,7 @@ object S3JsonArray extends SlamDB {
 
 // The exact same as the above, but with line-delimited JSON
 // parsing.
-object S3LineDelimited extends SlamDB {
+object S3LineDelimited extends SlamEngine {
   val Type: FileSystemType = FileSystemType("s3linedelim")
   val lwc: LightweightConnector = new S3LWC(S3JsonParsing.LineDelimited)
 }
