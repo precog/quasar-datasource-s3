@@ -7,10 +7,10 @@ sudo: false
 script: 
   - sbt test lwc/assembly
 
-before_deploy:
-  - chmod +x scripts/*
-  - . ./scripts/version
-  - . ./scripts/travis_tag
+#before_deploy:
+  #- chmod +x scripts/*
+  #- . ./scripts/version
+  #- . ./scripts/travis_tag
 
 #deploy:
   #provider: releases
