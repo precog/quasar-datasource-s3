@@ -21,7 +21,7 @@ object Dependencies {
   private val circeJawnVersion    = "0.8.0"
 
   // locally published quasar version with LWC support
-  private val quasarVersion       = "38.2.3"
+  private val quasarVersion       = "42.1.1"
 
   // http4s-blaze-client's version has to be in sync with
   // quasar's http4s version. The same goes for any
