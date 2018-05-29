@@ -4,7 +4,7 @@ jdk: oraclejdk8
 dist: trusty
 sudo: false
 script:
-- sbt test lwc/assembly
+  - sbt test lwc/assembly
 branches:
   except:
   - "/^v\\d+\\.\\d+\\.\\d+$/"
