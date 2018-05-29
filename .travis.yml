@@ -3,19 +3,29 @@ scala: 2.12.4
 jdk: oraclejdk8
 dist: trusty
 sudo: false
+
 script:
   - sbt test lwc/assembly
+
 branches:
   except:
   - /^v\d+\.\d+\.\d+$/ # don't redundantly build tags
+
 cache:
   directories:
   - $HOME/.coursier/cache
   - $HOME/.ivy2/cache
   - $HOME/.sbt
+
 before_cache:
   - find "$HOME/.sbt/" -name '*.lock' -print0 | xargs -0 rm
   - find "$HOME/.ivy2/" -name 'ivydata-*.properties' -print0 | xargs -0 rm
+
+env:
+  global:
+    - SBT=./sbt
+    - secure: "gcVd+nxNvnls9pZbLUvmLDWqU9t5/34kfDFQOv8iOj3QPiS4FYPPoA/N66g/YgTOuA/yeqZoJwQw8HfJwBqc+fjBczQz37taC5wYAjnNLJYzE6iF2dbYl15g8lad2q68rvFSOcbdLMB73fDNBuZN1WDq2Go6RSxZsYZXgbXoZKmGtgod4Qs/ERPkTt5mvy5nplS/mYVWWj7fbHt9dB2PErCdxB+Gb+txlcBUNbI5MhIcfjsnlKUudgGCkTjtid9HOw/kkY+o7MVBMjIRPVJRKNK2pJRQA+SWJf1tWHk3vhrqzgrZMIrbkbaTQjxPn7TuXItWlKcd7eONe9ByPwpGml/mZvfq3BFegqCezeWaDNiKqyjxuilCUNV5C6WNOiAbWvpkkt79hhqXrA9uAxk6IeGW4e6LjNhWffZsUBd4pX1MocUKX7c+PM0oBvn9H9SJgVl7tWlnCxoGQzpbU7HT7/rmFldofbLz3fRNRmEx6XzTNV3LI3472oQxH8yanyBRUJmXwdxvm+/EL39KcOF3qwevbVCTvn7VkSEYaujOPNvt8mEpw/Yk2cf5/ISG3tA1mrzihQ9PV/NBfbxkek2B1i1Sf5ImMpL7PrsoogbCbD4NbKNh0CWvIR9/EJrRpKkZOLKUF+qaeH81tH/QMl9Z9b9zIJJ1NfKTYCUG2X34srY="
+
 deploy:
   provider: releases
   api_key:

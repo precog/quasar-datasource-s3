@@ -7,7 +7,7 @@ SCRIPT_DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 
 WS_DIR="$SCRIPT_DIR/.."
 
-export SBT="$WS_DIR/sbt"
+SBT="$WS_DIR/sbt"
 
 "$SBT" transferPublishAndTagResources
 
