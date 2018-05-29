@@ -24,7 +24,7 @@ deploy:
   file:
     - runner/target/scala-2.12/quasar-s3-assembly-$VERSION.jar
   skip_cleanup: true
-  script
+  script:
     - ./scripts/version
   on:
     tags: false
