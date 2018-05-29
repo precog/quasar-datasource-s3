@@ -7,15 +7,15 @@ script:
   - sbt test lwc/assembly
 branches:
   except:
-  - "/^v\\d+\\.\\d+\\.\\d+$/"
+  - /^v\d+\.\d+\.\d+$/ # don't redundantly build tags
 cache:
   directories:
-  - "$HOME/.coursier/cache"
-  - "$HOME/.ivy2/cache"
-  - "$HOME/.sbt"
+  - $HOME/.coursier/cache
+  - $HOME/.ivy2/cache
+  - $HOME/.sbt
 before_cache:
-- find "$HOME/.sbt/" -name '*.lock' -print0 | xargs -0 rm
-- find "$HOME/.ivy2/" -name 'ivydata-*.properties' -print0 | xargs -0 rm
+  - find "$HOME/.sbt/" -name '*.lock' -print0 | xargs -0 rm
+  - find "$HOME/.ivy2/" -name 'ivydata-*.properties' -print0 | xargs -0 rm
 deploy:
   provider: releases
   key:
