@@ -18,7 +18,7 @@ before_cache:
   - find "$HOME/.ivy2/" -name 'ivydata-*.properties' -print0 | xargs -0 rm
 deploy:
   provider: releases
-  key:
+  api_key:
     secure: F9BzO6FEMq8i8PRBJJX9Ej7maLMhr0C4WoaveNxU8bwflw4CsXnSeifGmXGB23Px8m9kYARzX9KG0/YY6pbw2qz74HxLkwx2/CRQTAEDP6+/bfpaNmtNq9P05sxkeCmS1Hucw4nczprqlj8bg/5zbwNIr54oImPaBLaT4QxHiPQ=
   file_glob: true
   file:
