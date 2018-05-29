@@ -33,3 +33,5 @@ deploy:
     #condition: $TRAVIS_TAG = '' && ($TRAVIS_BRANCH == "master" || $TRAVIS_BRANCH == backport/*)
 
 
+after_deploy:
+  - scripts/publishAndTag 'quasar-analytics/quasar-s3'
