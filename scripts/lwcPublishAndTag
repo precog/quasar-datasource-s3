@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+set -euo pipefail # STRICT MODE
+IFS=$'\n\t'       # http://redsymbol.net/articles/unofficial-bash-strict-mode/
+
+SCRIPT_DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+
+WS_DIR="$SCRIPT_DIR/.."
+
+SBT="$WS_DIR/sbt"
+
+"$SBT" transferPublishAndTagResources
+
+# Set TRAVIS_JOB_NUMBER as a workaround to meet sbt-slamdata's publishAndTag assumption
+TRAVIS_JOB_NUMBER=1 scripts/publishAndTag 'quasar-analytics/quasar-s3'
+
