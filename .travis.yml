@@ -50,6 +50,4 @@ deploy:
 
 before_deploy:
   - scripts/lwcPublishAndTag
-
-after_deploy:
-  - tree .
+  - ls -R .
