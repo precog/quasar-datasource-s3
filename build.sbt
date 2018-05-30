@@ -195,7 +195,7 @@ lazy val repl = project
   .settings(name := "quasar-repl")
   .dependsOn(lwc)
   .settings(commonSettings)
-  .settings(githubReleaseSettings)
+  .settings(noPublishSettings)
   .settings(targetSettings)
   .settings(excludeTypelevelScalaLibrary)
   .settings(
