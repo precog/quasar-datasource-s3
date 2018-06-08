@@ -12,5 +12,5 @@ SBT="$WS_DIR/sbt"
 "$SBT" transferPublishAndTagResources
 
 # Set TRAVIS_JOB_NUMBER as a workaround to meet sbt-slamdata's publishAndTag assumption
-TRAVIS_JOB_NUMBER=1 scripts/publishAndTag 'quasar-analytics/quasar-s3'
+TRAVIS_JOB_NUMBER=1 scripts/publishAndTag 'slamdata/quasar-s3'
 
