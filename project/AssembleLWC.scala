@@ -38,6 +38,9 @@ object AssembleLWC {
       // LWC tarball.
       val buildOutputFolder = (crossTarget in Compile).value
 
+      // Grab the version to make it part of the tarball filename.
+      val thisVersion = (version in ThisBuild).value
+
       // we assemble every component of the final tarball
       // in this folder, to be exploded over the user's
       // `plugins` folder.
@@ -154,7 +157,7 @@ object AssembleLWC {
         files = lwcPluginsFolder.listFiles.map(p => lwcPluginsFolder.toPath.relativize(p.toPath)).mkString(" ")
 
         // the `plugins` tarball's location
-        tarPath = new File(buildOutputFolder, "lwc.tar.gz")
+        tarPath = new File(buildOutputFolder, s"quasar-s3-$thisVersion-explode.tar.gz")
 
         // the command we run to finish up: zip up (-c) all of
         // the files in our plugins folder ($files), with the
