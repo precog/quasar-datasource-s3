@@ -44,5 +44,9 @@ object Dependencies {
   )
 
   // no extra dependencies for integration tests, for now.
-  def it = lwc
+  def it = lwc ++ Seq(
+    "org.specs2" %% "specs2-core"               % specsVersion                         % Test,
+    "org.specs2" %% "specs2-scalacheck"         % specsVersion                         % Test,
+    "org.specs2" %% "specs2-scalaz"             % specsVersion                         % Test
+  )
 }
