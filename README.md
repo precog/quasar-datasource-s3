@@ -1,5 +1,7 @@
 # Quasar S3 Connector
 
+[![Build Status](https://travis-ci.org/slamdata/quasar-s3.svg?branch=master)](https://travis-ci.org/slamdata/quasar-s3)
+
 A connector for the Quasar open source analytics engine, that
 provides access to Amazon S3.
 
