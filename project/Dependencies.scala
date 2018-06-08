@@ -23,6 +23,9 @@ object Dependencies {
   // locally published quasar version with LWC support
   private val quasarVersion       = "42.1.1"
 
+  // same as quasar's
+  private val specsVersion       = "4.0.2"
+
   // http4s-blaze-client's version has to be in sync with
   // quasar's http4s version. The same goes for any
   // dependencies, transitive or otherwise.

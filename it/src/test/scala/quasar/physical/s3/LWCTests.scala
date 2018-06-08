@@ -18,6 +18,9 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 
+import org.specs2.execute.Result
+import org.specs2.mutable.Specification
+
 import pathy._
 import quasar.Data
 import quasar.contrib.pathy._
@@ -41,7 +44,7 @@ object LWCTests {
 
   type T = Task[Unit]
 
-  def main(args: Array[String]) = {
+  def runTests[A](success: A, failure: String => A): Task[A] = {
     val testDir: ADir = Path.rootDir </> Path.dir("testData")
     val testUri: ConnectionUri = ConnectionUri("http://s3-lwc-test.s3.amazonaws.com")
     val testArrayObject: AFile = testDir </> Path.file("array.json")
@@ -82,13 +85,13 @@ object LWCTests {
       lineLwfsE <- S3LineDelimited.lwc.init(testUri).run
       \/-((lineLwfs, _)) = lineLwfsE
       lineR = testLaws("Line", lineLwfs, lineData)
-      _ <- gather(List(arrR, lineR), none).attempt.flatMap {
+      r <- gather(List(arrR, lineR), none).attempt.flatMap {
         case -\/(ex) =>
-          Task.delay(println(showThrowable(ex, 0)))
+          Task.now(failure(showThrowable(ex, 0)))
         case \/-(_) =>
-          Task.delay(println("tests successful!"))
+          Task.now(success)
       }
-    } yield ()).unsafePerformSync
+    } yield r)
   }
 
   def makeTestFS(lwfs: LightweightFileSystem): Task[TestFS] = {
@@ -289,4 +292,10 @@ object LWCTests {
       }
     }, "File existence".some).void
 
+}
+
+final class LWCTestSuite extends Specification {
+  "test LWC properties" >> {
+    LWCTests.runTests[Result](success, failure).unsafePerformSync must not(throwA[Exception])
+  }
 }
