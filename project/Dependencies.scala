@@ -20,8 +20,7 @@ object Dependencies {
   // fs2 and jawn, so we use the older circe-jawn version.
   private val circeJawnVersion    = "0.8.0"
 
-  // locally published quasar version with LWC support
-  private val quasarVersion       = "42.1.1"
+  private val quasarVersion       = IO.read(file("./quasar-version")).trim
 
   // same as quasar's
   private val specsVersion       = "4.0.2"
