@@ -25,6 +25,7 @@ import scalaz.concurrent.{Actor, Task}
 import scalaz.stream.Process
 import scala.language.higherKinds
 import scalaz.{-\/, \/, \/-}
+import shims._
 
 // The code below was adapted from a gist originally written by Pavel Chlupacek (@pchlupacek on github)
 // and shared with the community as https://gist.github.com/pchlupacek/989a2801036a9441da252726a1b4972d.
@@ -56,8 +57,8 @@ private[s3] object fs2Conversion {
 
 
     go
-    .onError { rsn =>
-      Stream.eval_(Task.delay { actor ! SubscriberDone(Some(rsn)) }) ++ Stream.fail(rsn)
+    .handleErrorWith { rsn =>
+      Stream.eval_(Task.delay { actor ! SubscriberDone(Some(rsn)) }) ++ Stream.raiseError(rsn)
     }
     .onFinalize {
       Task.delay(actor ! SubscriberDone(None))

@@ -24,6 +24,7 @@ import org.specs2.mutable.Specification
 import pathy._
 import quasar.Data
 import quasar.contrib.pathy._
+import quasar.contrib.scalaz.concurrent.task._
 import quasar.fs.mount.ConnectionUri
 import quasar.mimir.LightweightFileSystem
 import scalaz._, Scalaz._
@@ -141,7 +142,7 @@ object LWCTests {
               s"File $file is not readable."
             ))
           case \/-(Some(contentStream)) =>
-            contentStream.runLog.map(_.toList).attempt.map {
+            contentStream.compile.toVector.map(_.toList).attempt.map {
               case -\/(_) => (file, none)
               case \/-(r) => (file, r.some)
             }
