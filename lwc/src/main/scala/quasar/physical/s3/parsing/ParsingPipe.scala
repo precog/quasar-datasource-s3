@@ -23,28 +23,34 @@ package quasar.physical.s3.parsing
 import slamdata.Predef.{Seq => _, _}
 import scala.collection.Seq
 
-import fs2.{ Chunk, Handle, Pipe, Pull, Stream }
+import fs2.{ Pipe, Pull, Segment, Stream }
 import jawn.{ AsyncParser, ParseException }
 import io.circe.{ Json, ParsingFailure }
 import io.circe.jawn.CirceSupportParser
 
 private[parsing] abstract class ParsingPipe[F[_], S] extends Pipe[F, S, Json] {
+
   protected[this] def parsingMode: AsyncParser.Mode
 
-  protected[this] def parseWith(parser: AsyncParser[Json])(in: S): Either[ParseException, Seq[Json]]
+  protected[this] def parseWith(parser: AsyncParser[Json])(in: S)
+      : Either[ParseException, Seq[Json]]
 
-  private[this] final def makeParser: AsyncParser[Json] = CirceSupportParser.async(mode = parsingMode)
+  private[this] final def makeParser: AsyncParser[Json] =
+    CirceSupportParser.async(mode = parsingMode)
 
   @SuppressWarnings(Array("org.wartremover.warts.Recursion"))
-  private[this] final def doneOrLoop[A](p: AsyncParser[Json])(h: Handle[F, S]): Pull[F, Json, Unit] =
-    h.receive1 {
-      case (s, h) => parseWith(p)(s) match {
+  private[this] final def doneOrLoop[A](p: AsyncParser[Json])(s: Stream[F, S])
+      : Pull[F, Json, Unit] =
+    s.pull.uncons1.flatMap {
+      case Some((s, h)) => parseWith(p)(s) match {
         case Left(error) =>
-          Pull.fail(ParsingFailure(error.getMessage, error))
+          Pull.raiseError(ParsingFailure(error.getMessage, error))
         case Right(js) =>
-          Pull.output(Chunk.seq(js)) >> doneOrLoop(p)(h)
+          Pull.output(Segment.seq(js)) >> doneOrLoop(p)(h)
       }
+      case None => Pull.done
     }
 
-  final def apply(s: Stream[F, S]): Stream[F, Json] = s.pull(doneOrLoop(makeParser))
+  final def apply(s: Stream[F, S]): Stream[F, Json] =
+    doneOrLoop(makeParser)(s).stream
 }

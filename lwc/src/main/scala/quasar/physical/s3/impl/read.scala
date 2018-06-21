@@ -30,6 +30,7 @@ import pathy.Path
 import scalaz.Scalaz._
 import scalaz.concurrent.Task
 import scodec.bits.ByteVector
+import shims._
 
 object read {
 
@@ -66,7 +67,7 @@ object read {
       case DisposableResponse(response, dispose) =>
         response.status match {
           case Status.NotFound => Task.now(none)
-          case Status.Ok => Task.now(f(response).onFinalize[Task](dispose).some)
+          case Status.Ok => Task.now(f(response).onFinalize(dispose).some)
           case s => Task.fail(new Exception(s"Unexpected status $s"))
         }
     }

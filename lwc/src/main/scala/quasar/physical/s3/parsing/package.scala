@@ -24,7 +24,6 @@ import slamdata.Predef.{Seq => _, _}
 import scala.collection.Seq
 
 import fs2.{ Chunk, Pipe, Stream }
-import fs2.pipe
 import jawn.{ AsyncParser, ParseException }
 import io.circe.{Decoder, Json}
 import io.circe.jawn.CirceSupportParser
@@ -42,26 +41,31 @@ package object parsing {
 
   final def byteStreamParserC[F[_]]: Pipe[F, Chunk[Byte], Json] = byteParserC(AsyncParser.ValueStream)
 
-  final def stringParser[F[_]](mode: AsyncParser.Mode): Pipe[F, String, Json] = new ParsingPipe[F, String] {
-    protected[this] final def parseWith(p: AsyncParser[Json])(in: String): Either[ParseException, Seq[Json]] =
-      p.absorb(in)(CirceSupportParser.facade)
+  final def stringParser[F[_]](mode: AsyncParser.Mode): Pipe[F, String, Json] =
+    new ParsingPipe[F, String] {
+      protected[this] final def parseWith(p: AsyncParser[Json])(in: String)
+          : Either[ParseException, Seq[Json]] =
+        p.absorb(in)(CirceSupportParser.facade)
 
-    protected[this] val parsingMode: AsyncParser.Mode = mode
-  }
+      protected[this] val parsingMode: AsyncParser.Mode = mode
+    }
 
-  final def byteParserC[F[_]](mode: AsyncParser.Mode): Pipe[F, Chunk[Byte], Json] = new ParsingPipe[F, Chunk[Byte]] {
-    protected[this] final def parseWith(p: AsyncParser[Json])(in: Chunk[Byte]): Either[ParseException, Seq[Json]] =
-      p.absorb(in.toArray)(CirceSupportParser.facade)
+  final def byteParserC[F[_]](mode: AsyncParser.Mode): Pipe[F, Chunk[Byte], Json] =
+    new ParsingPipe[F, Chunk[Byte]] {
+      protected[this] final def parseWith(p: AsyncParser[Json])(in: Chunk[Byte])
+          : Either[ParseException, Seq[Json]] =
+        p.absorb(in.toArray)(CirceSupportParser.facade)
 
-    protected[this] val parsingMode: AsyncParser.Mode = mode
-  }
+      protected[this] val parsingMode: AsyncParser.Mode = mode
+    }
 
-  final def byteParser[F[_]](mode: AsyncParser.Mode): Pipe[F, Byte, Json] = _.through(pipe.chunks).through(byteParserC(mode))
+  final def byteParser[F[_]](mode: AsyncParser.Mode): Pipe[F, Byte, Json] =
+    _.chunks.through(byteParserC(mode))
 
   final def decoder[F[_], A](implicit decode: Decoder[A]): Pipe[F, Json, A] =
     _.flatMap { json =>
       decode(json.hcursor) match {
-        case Left(df) => Stream.fail(df)
+        case Left(df) => Stream.raiseError(df)
         case Right(a) => Stream.emit(a)
       }
     }
