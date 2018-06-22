@@ -26,7 +26,7 @@ def exclusiveTasks(tasks: Scoped*) =
   tasks.flatMap(inTask(_)(tags := Seq((ExclusiveTest, 1))))
 
 lazy val buildSettings = commonBuildSettings ++ Seq(
-  organization := "org.quasar-analytics",
+  organization := "com.slamdata",
   scalaOrganization := "org.scala-lang",
   scalacOptions --= Seq(
     "-Yliteral-types",
@@ -99,11 +99,11 @@ lazy val publishSettings = commonPublishSettings ++ Seq(
   performMavenCentralSync := false,
   organizationName := "SlamData Inc.",
   organizationHomepage := Some(url("http://quasar-analytics.org")),
-  homepage := Some(url("https://github.com/quasar-analytics/quasar-s3")),
+  homepage := Some(url("https://github.com/slamdata/quasar-s3")),
   scmInfo := Some(
     ScmInfo(
-      url("https://github.com/quasar-analytics/quasar-s3"),
-      "scm:git@github.com:quasar-analytics/quasar-s3.git"
+      url("https://github.com/slamdata/quasar-s3"),
+      "scm:git@github.com:slamdata/quasar-s3.git"
     )
   ))
 
@@ -138,7 +138,7 @@ lazy val publishTestsSettings = Seq(
 lazy val githubReleaseSettings =
   githubSettings ++ Seq(
     GithubKeys.assets := Seq(assembly.value),
-    GithubKeys.repoSlug := "quasar-analytics/quasar-s3",
+    GithubKeys.repoSlug := "slamdata/quasar-s3",
     GithubKeys.releaseName := "quasar " + GithubKeys.tag.value,
     releaseVersionFile := file("version.sbt"),
     releaseUseGlobalVersion := true,
