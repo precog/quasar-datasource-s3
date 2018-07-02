@@ -25,14 +25,10 @@ import pathy.Path
 import quasar.contrib.pathy._
 import scala.xml
 import scalaz.concurrent.Task
-import scalaz.std.option._
-import scalaz.std.list._
-import scalaz.syntax.equal._
-import scalaz.syntax.std.boolean._
-import scalaz.syntax.std.option._
-import scalaz.syntax.traverse._
+import scalaz.Scalaz._
 
-object children { private def aPathToObjectPrefix(apath: APath): Option[String] = {
+object children {
+  private def aPathToObjectPrefix(apath: APath): Option[String] = {
     // Don't provide an object prefix if listing the
     // entire bucket. Otherwise, we have to drop
     // the first `/`, because object prefixes can't
@@ -62,7 +58,7 @@ object children { private def aPathToObjectPrefix(apath: APath): Option[String] 
   // Interpret this as converting an `Option[A]` to a
   // `B => B` using a "combiner" function (B, A) => B.
   implicit private final class optApplyOps[B](self: B) {
-    def >+>[A](opt: Option[A], f: (B, A) => B): B = opt.fold(self)(f(self, _))
+    def >+[A](opt: Option[A], f: (B, A) => B): B = opt.fold(self)(f(self, _))
   }
 
   // S3 provides a recursive listing (akin to `find` or
@@ -72,7 +68,8 @@ object children { private def aPathToObjectPrefix(apath: APath): Option[String] 
   // could conceivably list *none* of the direct children of a
   // folder without pagination, depending on the order AWS
   // sends them in.
-  def apply(client: Client, uri: Uri, dir: ADir): Task[Option[Set[PathSegment]]] = {
+  @SuppressWarnings(Array("org.wartremover.warts.Recursion"))
+  def apply(client: Client, uri: Uri, dir: ADir, paginationToken: Option[String]): Task[Option[Set[PathSegment]]] = {
     // Converts a pathy Path to an S3 object prefix.
     val objectPrefix = aPathToObjectPrefix(dir)
 
@@ -81,9 +78,10 @@ object children { private def aPathToObjectPrefix(apath: APath): Option[String] 
     // `list-type=2` asks for the new version of the list api.
     // We only add the `objectPrefix` if it's not empty;
     // the S3 API doesn't understand empty `prefix`.
-    val queryUri = ((uri / "") +?
-      ("list-type", 2)) >+>[String]
-      (objectPrefix, _ +? ("prefix", _))
+    val queryUri = (uri / "") +?
+      ("list-type", 2) >+[String]
+      (objectPrefix, _ +? ("prefix", _)) >+[String]
+      (paginationToken, _ +? ("continuation-token", _))
 
       for {
         // Send request to S3, parse the response as XML.
@@ -92,22 +90,13 @@ object children { private def aPathToObjectPrefix(apath: APath): Option[String] 
         children <- for {
           contents <- Task.suspend {
             // Grab <Contents>.
-            try {
-              Task.now(topLevelElem \\ "Contents")
-            } catch {
-              case ex: Exception =>
-                Task.fail(new Exception("XML received from AWS API has no top-level <Contents> element", ex))
-            }
+            (topLevelElem \\ "Contents").headOption.fold[Task[xml.Node]](
+              Task.fail(new Exception("XML received from AWS API has no top-level <Contents> element"))
+            )(Task.now)
           }
-          // Grab all of the <Key> elements from <Contents>.
-          names <- contents.toList.traverse { elem =>
-            try {
-              Task.now((elem \\ "Key").text)
-            } catch {
-              case ex: Exception =>
-                Task.fail(new Exception("XML received from AWS API has no <Key> elements under <Contents>", ex))
-            }
-          }
+          // Grab all of the text inside the <Key> elements
+          // from <Contents>.
+          names = contents.toList.map { e => (e \\ "Key").text }
         } yield names
         // Convert S3 object names to paths.
         childPaths <- children.traverse(s3NameToPath)
@@ -132,7 +121,12 @@ object children { private def aPathToObjectPrefix(apath: APath): Option[String] 
             // Remove duplicates.
             // TODO: Report an error if there are duplicates.
             .map(_._2).toSet)
-      } yield result
+        nextResults <- if ((topLevelElem \\ "IsTruncated").text === "true") {
+          val token = (topLevelElem \\ "NextContinuationToken").text
+          apply(client, uri, dir, Some(token))
+        } else Task.now(Some(Set.empty))
+
+      } yield ^(result, nextResults)(_ ++ _)
   }
 
 }
