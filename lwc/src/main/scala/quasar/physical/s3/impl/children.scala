@@ -24,22 +24,99 @@ import org.http4s.scalaxml.{xml => xmlDecoder}
 import pathy.Path
 import quasar.contrib.pathy._
 import scala.xml
-import scalaz.concurrent.Task
-import scalaz.std.option._
-import scalaz.std.list._
-import scalaz.syntax.equal._
-import scalaz.syntax.std.boolean._
-import scalaz.syntax.std.option._
-import scalaz.syntax.traverse._
 
-object children { private def aPathToObjectPrefix(apath: APath): Option[String] = {
+import cats.effect.Sync
+import cats.instances.list._
+import cats.instances.option._
+import cats.syntax.option._
+import cats.syntax.flatMap._
+import cats.syntax.traverse._
+import cats.syntax.functor._
+import cats.syntax.foldable._
+import cats.syntax.eq._
+
+// So we have Eq[ADir], Eq[AFile]
+import shims._
+
+object children {
+  // S3 provides a recursive listing (akin to `find` or
+  // `dirtree`); we filter out children that aren't direct
+  // children. We can only list 1000 keys, and need pagination
+  // to do more. That's 1000 *recursively listed* keys, so we
+  // could conceivably list *none* of the direct children of a
+  // folder without pagination, depending on the order AWS
+  // sends them in.
+  def apply[F[_]: Sync](client: Client[F], uri: Uri, dir: ADir): F[Option[Set[PathSegment]]] = {
+    // Converts a pathy Path to an S3 object prefix.
+    val objectPrefix = aPathToObjectPrefix(dir)
+
+    // Start with the bucket URI; add an extra `/` on the end
+    // so that S3 understands us.
+    // `list-type=2` asks for the new version of the list api.
+    // We only add the `objectPrefix` if it's not empty;
+    // the S3 API doesn't understand empty `prefix`.
+    val queryUri =
+      ((uri / "") withQueryParam ("list-type", 2)) >+>[String] (objectPrefix, _ withQueryParam ("prefix", _))
+
+      for {
+        // Send request to S3, parse the response as XML.
+        topLevelElem <- client.expect[xml.Elem](queryUri)
+        // Grab child object names from the response.
+        children <- for {
+          contents <- Sync[F].suspend {
+            // Grab <Contents>.
+            try {
+              Sync[F].pure(topLevelElem \\ "Contents")
+            } catch {
+              case ex: Exception =>
+                Sync[F].raiseError(new Exception("XML received from AWS API has no top-level <Contents> element", ex))
+            }
+          }
+          // Grab all of the <Key> elements from <Contents>.
+          names <- contents.toList.traverse[F, String] { elem =>
+            try {
+              Sync[F].pure((elem \\ "Key").text)
+            } catch {
+              case ex: Exception =>
+                Sync[F].raiseError(new Exception("XML received from AWS API has no <Key> elements under <Contents>", ex))
+            }
+          }
+        } yield names
+        // Convert S3 object names to paths.
+        childPaths <- children.traverse(s3NameToPath)
+          .fold(Sync[F].raiseError[List[APath]](new Exception(s"Failed to parse object path in S3 API response")))(Sync[F].pure)
+        // Deal with some S3 idiosyncrasies.
+        // TODO: Pagination
+        result =
+        if (dir =!= Path.rootDir && !childPaths.contains_(dir)) None
+        else Some(
+          childPaths
+            .filter(path =>
+              // AWS includes the folder itself in the returned
+              // results, so we have to remove it.
+              // The same goes for files in folders *below*
+              // the listed folder.
+              path =!= dir && Path.parentDir(path) === Some(dir))
+            // Take the file name or folder name of the
+            // child out of the full object path.
+            // TODO: Report an error when `Path.peel` fails,
+            // that's nonsense.
+            .flatMap(Path.peel(_).toList)
+            // Remove duplicates.
+            // TODO: Report an error if there are duplicates.
+            .map(_._2).toSet)
+      } yield result
+  }
+
+  private def aPathToObjectPrefix(apath: APath): Option[String] = {
     // Don't provide an object prefix if listing the
     // entire bucket. Otherwise, we have to drop
     // the first `/`, because object prefixes can't
     // begin with `/`.
-    (apath != Path.rootDir).option {
-      Path.posixCodec.printPath(apath).drop(1) // .replace("/", "%2F")
-    }
+    if (apath != Path.rootDir)
+      Path.posixCodec.printPath(apath).drop(1).self.some // .replace("/", "%2F")
+    else
+      none[String]
   }
 
   private def s3NameToPath(name: String): Option[APath] = {
@@ -64,75 +141,4 @@ object children { private def aPathToObjectPrefix(apath: APath): Option[String] 
   implicit private final class optApplyOps[B](self: B) {
     def >+>[A](opt: Option[A], f: (B, A) => B): B = opt.fold(self)(f(self, _))
   }
-
-  // S3 provides a recursive listing (akin to `find` or
-  // `dirtree`); we filter out children that aren't direct
-  // children. We can only list 1000 keys, and need pagination
-  // to do more. That's 1000 *recursively listed* keys, so we
-  // could conceivably list *none* of the direct children of a
-  // folder without pagination, depending on the order AWS
-  // sends them in.
-  def apply(client: Client, uri: Uri, dir: ADir): Task[Option[Set[PathSegment]]] = {
-    // Converts a pathy Path to an S3 object prefix.
-    val objectPrefix = aPathToObjectPrefix(dir)
-
-    // Start with the bucket URI; add an extra `/` on the end
-    // so that S3 understands us.
-    // `list-type=2` asks for the new version of the list api.
-    // We only add the `objectPrefix` if it's not empty;
-    // the S3 API doesn't understand empty `prefix`.
-    val queryUri = ((uri / "") +?
-      ("list-type", 2)) >+>[String]
-      (objectPrefix, _ +? ("prefix", _))
-
-      for {
-        // Send request to S3, parse the response as XML.
-        topLevelElem <- client.expect[xml.Elem](queryUri)
-        // Grab child object names from the response.
-        children <- for {
-          contents <- Task.suspend {
-            // Grab <Contents>.
-            try {
-              Task.now(topLevelElem \\ "Contents")
-            } catch {
-              case ex: Exception =>
-                Task.fail(new Exception("XML received from AWS API has no top-level <Contents> element", ex))
-            }
-          }
-          // Grab all of the <Key> elements from <Contents>.
-          names <- contents.toList.traverse { elem =>
-            try {
-              Task.now((elem \\ "Key").text)
-            } catch {
-              case ex: Exception =>
-                Task.fail(new Exception("XML received from AWS API has no <Key> elements under <Contents>", ex))
-            }
-          }
-        } yield names
-        // Convert S3 object names to paths.
-        childPaths <- children.traverse(s3NameToPath)
-          .cata(Task.now, Task.fail(new Exception(s"Failed to parse object path in S3 API response")))
-        // Deal with some S3 idiosyncrasies.
-        // TODO: Pagination
-        result =
-        if (dir =/= Path.rootDir && !childPaths.element(dir)) None
-        else Some(
-          childPaths
-            .filter(path =>
-              // AWS includes the folder itself in the returned
-              // results, so we have to remove it.
-              // The same goes for files in folders *below*
-              // the listed folder.
-              path =/= dir && Path.parentDir(path) === Some(dir))
-            // Take the file name or folder name of the
-            // child out of the full object path.
-            // TODO: Report an error when `Path.peel` fails,
-            // that's nonsense.
-            .flatMap(Path.peel(_).toList)
-            // Remove duplicates.
-            // TODO: Report an error if there are duplicates.
-            .map(_._2).toSet)
-      } yield result
-  }
-
 }

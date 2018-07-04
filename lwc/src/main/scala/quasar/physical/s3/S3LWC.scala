@@ -21,12 +21,13 @@ import quasar.fs.mount.ConnectionUri
 import quasar.mimir.{LightweightConnector, LightweightFileSystem, SlamEngine}
 import slamdata.Predef._
 
-import org.http4s.client.blaze.PooledHttp1Client
+import org.http4s.client.blaze.Http1Client
 import org.http4s.Uri
 
 import scalaz._
 import scalaz.syntax.either._
 import scalaz.concurrent.Task
+import shims.effect._
 
 sealed trait S3JsonParsing
 
@@ -47,8 +48,8 @@ final class S3LWC(jsonParsing: S3JsonParsing) extends LightweightConnector {
       httpUri.fold(
         e => Task.fail(new Exception(s"Error when parsing $httpUri as URI:\n$e")),
         { u =>
-          val client = PooledHttp1Client()
-          Task.now((new S3LWFS(jsonParsing, u, client), client.shutdown))
+          Http1Client[Task]().flatMap(client =>
+            Task.now((new S3LWFS(jsonParsing, u, client), client.shutdown)))
         }
       ).map(_.right[String])
     })

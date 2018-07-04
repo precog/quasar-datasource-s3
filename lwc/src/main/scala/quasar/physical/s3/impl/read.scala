@@ -17,28 +17,30 @@
 package quasar.physical.s3
 package impl
 
+import slamdata.Predef._
 import quasar.Data
 import quasar.contrib.pathy._
 import quasar.physical.s3.S3JsonParsing
-import slamdata.Predef._
 
 import fs2.{Pipe, Stream}
 import io.circe.Json
 import org.http4s.client._
 import org.http4s.{Request, Response, Status, Uri}
 import pathy.Path
-import scalaz.Scalaz._
-import scalaz.concurrent.Task
-import scodec.bits.ByteVector
 import shims._
+
+import cats.effect.Sync
+import cats.syntax.option._
+import cats.syntax.flatMap._
+import cats.syntax.applicative._
 
 object read {
 
   // circe's streaming parser, which we select based on the
   // passed S3JsonParsing
-  private def circePipe[F[_]](jsonParsing: S3JsonParsing): Pipe[F, String, Json] = jsonParsing match {
-    case S3JsonParsing.JsonArray => parsing.stringArrayParser[F]
-    case S3JsonParsing.LineDelimited => parsing.stringStreamParser[F]
+  private def circePipe[F[_]](jsonParsing: S3JsonParsing): Pipe[F, Byte, Json] = jsonParsing match {
+    case S3JsonParsing.JsonArray => parsing.byteArrayParser[F]
+    case S3JsonParsing.LineDelimited => parsing.byteStreamParser[F]
   }
 
   // as it says on the tin, converts circe's JSON type to
@@ -62,46 +64,37 @@ object read {
   // if it's `Some(resp)` we compute an fs2 stream from
   // it using `f` and then call `dispose` on that response
   // once we've finished streaming.
-  private def streamRequestThroughFs2[A](client: Client, req: Request)(f: Response => Stream[Task, A]): Task[Option[Stream[Task, A]]] = {
+  private def streamRequestThroughFs2[F[_]: Sync, A](client: Client[F], req: Request[F])(f: Response[F] => Stream[F, A]): F[Option[Stream[F, A]]] = {
     client.open(req).flatMap {
       case DisposableResponse(response, dispose) =>
         response.status match {
-          case Status.NotFound => Task.now(none)
-          case Status.Ok => Task.now(f(response).onFinalize(dispose).some)
-          case s => Task.fail(new Exception(s"Unexpected status $s"))
+          case Status.NotFound => none.pure[F]
+          case Status.Ok => f(response).onFinalize(dispose).some.pure[F]
+          case s => Sync[F].raiseError(new Exception(s"Unexpected status $s"))
         }
     }
   }
 
   // putting it all together.
-  def apply(jsonParsing: S3JsonParsing, client: Client, uri: Uri, file: AFile): Task[Option[Stream[Task, Data]]] = {
+  def apply[F[_]: Sync](jsonParsing: S3JsonParsing, client: Client[F], uri: Uri, file: AFile): F[Option[Stream[F, Data]]] = {
     // convert the pathy Path to a POSIX path, dropping
     // the first slash, like S3 expects for object paths
     val objectPath = Path.posixCodec.printPath(file).drop(1)
 
     // Put the object path after the bucket URI
     val queryUri = uri / objectPath
-    val request = Request(uri = queryUri)
+    val request = Request[F](uri = queryUri)
 
     // figure out how we're going to parse the object as JSON
-    val circeJsonPipe = circePipe[Task](jsonParsing)
+    val circeJsonPipe = circePipe[F](jsonParsing)
 
-    streamRequestThroughFs2(client, request) { resp =>
-      // convert the scalaz.stream.Process to an fs2.Stream
-      // TODO: can this fail? I don't believe so.
-      val asFs2: Stream[Task, ByteVector] = fs2Conversion.processToFs2(resp.body)
-
-      // utf8-decode the stream.
-      // TODO: a possible failure point
-      val asStrings: Stream[Task, String] = asFs2.evalMap(_.decodeUtf8.fold(Task.fail, Task.now))
-
-      // TODO: another possible failure
+    streamRequestThroughFs2[F, Data](client, request) { resp =>
       // convert the data to JSON, using the parsing method
       // of our choice
-      val asJson: Stream[Task, Json] = asStrings.through(circeJsonPipe)
+      val asJson: Stream[F, Json] = resp.body.through(circeJsonPipe)
 
       // convert the JSON from circe's representation to ours
-      val asData: Stream[Task, Data] = asJson.map(circeJsonToData)
+      val asData: Stream[F, Data] = asJson.map(circeJsonToData)
 
       // and we're done.
       asData

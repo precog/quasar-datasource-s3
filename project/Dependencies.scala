@@ -6,7 +6,7 @@ import scala.collection.Seq
 import sbt._
 
 object Dependencies {
-  private val http4sVersion = "0.16.6a"
+  private val http4sVersion = "0.18.13"
 
   // hooray, scala-xml. we use it for parsing XML out of
   // the S3 API's responses.
@@ -22,6 +22,8 @@ object Dependencies {
 
   private val specsVersion = "4.2.0"
 
+  private val shimsVersion = "1.3.0"
+
   // http4s-blaze-client's version has to be in sync with
   // quasar's http4s version. The same goes for any
   // dependencies, transitive or otherwise.
@@ -29,7 +31,8 @@ object Dependencies {
     "org.http4s"             %% "http4s-scala-xml"    % http4sVersion,
     "org.http4s"             %% "http4s-blaze-client" % http4sVersion,
     "org.scala-lang.modules" %% "scala-xml"           % scalaXmlVersion,
-    "io.circe"               %% "circe-jawn"          % circeJawnVersion
+    "io.circe"               %% "circe-jawn"          % circeJawnVersion,
+    "com.codecommit"         %% "shims-effect"        % shimsVersion
   )
 
   // we need to separate quasar out from the LWC dependencies,

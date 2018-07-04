@@ -22,12 +22,14 @@ import org.http4s.client.Client
 import org.http4s.{Method, Request, Status, Uri}
 import pathy.Path
 import quasar.contrib.pathy._
-import scalaz.concurrent.Task
+import cats.effect.Sync
+import cats.syntax.flatMap._
+import cats.syntax.applicative._
 
 // The simplest method to implement, check that HEAD doesn't
 // give a 404.
 object exists {
-  def apply(client: Client, uri: Uri, file: AFile): Task[Boolean] = {
+  def apply[F[_]: Sync](client: Client[F], uri: Uri, file: AFile): F[Boolean] = {
     // Print pathy.Path as POSIX path, without leading slash,
     // for S3's consumption.
     val objectPath = Path.posixCodec.printPath(file).drop(1)
@@ -36,14 +38,14 @@ object exists {
     val queryUri = uri / objectPath
 
     // Request with HEAD, to get metadata.
-    val request = Request(uri = queryUri, method = Method.HEAD)
+    val request = Request[F](uri = queryUri, method = Method.HEAD)
 
     // Don't use the metadata, just check if the request
     // returns a 404.
-    client.status(request).flatMap {
-      case Status.Ok => Task.now(true)
-      case Status.NotFound => Task.now(false)
-      case s => Task.fail(new Exception(s"Unexpected status returned during `exists` call: $s"))
+    client.status(request) >>= {
+      case Status.Ok => true.pure[F]
+      case Status.NotFound => false.pure[F]
+      case s => Sync[F].raiseError(new Exception(s"Unexpected status returned during `exists` call: $s")) // TODO: fail somehow else
     }
   }
 }

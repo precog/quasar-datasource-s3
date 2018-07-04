@@ -28,7 +28,7 @@ import scalaz.concurrent.Task
 
 // Three functions comprise the LightweightFileSystem API
 // (and informally, the lightweight connector API itself)
-final class S3LWFS(jsonParsing: S3JsonParsing, uri: Uri, client: Client) extends LightweightFileSystem {
+final class S3LWFS(jsonParsing: S3JsonParsing, uri: Uri, client: Client[Task]) extends LightweightFileSystem {
 
   // Lists the "immediate children" of a directory.
   // S3 object names roughly follow the POSIX
