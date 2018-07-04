@@ -22,6 +22,7 @@ import org.http4s.client.Client
 import org.http4s.Uri
 import org.http4s.scalaxml.{xml => xmlDecoder}
 import pathy.Path
+import Path.{DirName, FileName}
 import quasar.contrib.pathy._
 import scala.xml
 
@@ -34,6 +35,7 @@ import cats.syntax.traverse._
 import cats.syntax.functor._
 import cats.syntax.foldable._
 import cats.syntax.eq._
+import scalaz.{\/-, -\/}
 
 // So we have Eq[ADir], Eq[AFile]
 import shims._
@@ -46,7 +48,7 @@ object children {
   // could conceivably list *none* of the direct children of a
   // folder without pagination, depending on the order AWS
   // sends them in.
-  def apply[F[_]: Sync](client: Client[F], uri: Uri, dir: ADir): F[Option[Set[PathSegment]]] = {
+  def apply[F[_]: Sync](client: Client[F], uri: Uri, dir: APath): F[Option[Set[PathSegment]]] = {
     // Converts a pathy Path to an S3 object prefix.
     val objectPrefix = aPathToObjectPrefix(dir)
 
@@ -55,8 +57,9 @@ object children {
     // `list-type=2` asks for the new version of the list api.
     // We only add the `objectPrefix` if it's not empty;
     // the S3 API doesn't understand empty `prefix`.
+    val listingQuery = (uri / "") withQueryParam ("list-type", 2)
     val queryUri =
-      ((uri / "") withQueryParam ("list-type", 2)) >+>[String] (objectPrefix, _ withQueryParam ("prefix", _))
+      objectPrefix.fold(listingQuery)(prefix => listingQuery withQueryParam ("prefix", prefix))
 
       for {
         // Send request to S3, parse the response as XML.
@@ -82,6 +85,7 @@ object children {
             }
           }
         } yield names
+
         // Convert S3 object names to paths.
         childPaths <- children.traverse(s3NameToPath)
           .fold(Sync[F].raiseError[List[APath]](new Exception(s"Failed to parse object path in S3 API response")))(Sync[F].pure)
@@ -96,7 +100,7 @@ object children {
               // results, so we have to remove it.
               // The same goes for files in folders *below*
               // the listed folder.
-              path =!= dir && Path.parentDir(path) === Some(dir))
+              path =!= dir && Path.parentDir(path) === pathToDir(dir))
             // Take the file name or folder name of the
             // child out of the full object path.
             // TODO: Report an error when `Path.peel` fails,
@@ -136,9 +140,10 @@ object children {
     unsandboxed.map(unsafeSandboxAbs)
   }
 
-  // Interpret this as converting an `Option[A]` to a
-  // `B => B` using a "combiner" function (B, A) => B.
-  implicit private final class optApplyOps[B](self: B) {
-    def >+>[A](opt: Option[A], f: (B, A) => B): B = opt.fold(self)(f(self, _))
-  }
+  private def pathToDir(path: APath): Option[ADir] =
+    Path.peel(path) match {
+      case Some((d, \/-(FileName(fn)))) => (d </> Path.dir(fn)).some
+      case Some((d, -\/(DirName(dn)))) => (d </> Path.dir(dn)).some
+      case _ => none
+    }
 }

@@ -16,20 +16,21 @@
 
 package quasar.physical.s3
 
-import slamdata.Predef.{Stream => _, _}
+import eu.timepit.refined.auto._
+import fs2.Stream
+import org.http4s.Uri
+import org.http4s.client.Client
 import quasar.Data
+import quasar.api.DataSourceError.CommonError
+import quasar.api.ResourceError
+import quasar.api.ResourcePath.{Leaf, Root}
 import quasar.api.{DataSourceType, ResourceName, ResourcePath, ResourcePathType}
 import quasar.connector.datasource.LightweightDataSource
-import quasar.api.ResourceError
-import quasar.api.DataSourceError.CommonError
-import quasar.api.ResourcePath.{Leaf, Root}
-import org.http4s.client.Client
-import org.http4s.Uri
-import fs2.Stream
-import eu.timepit.refined.auto._
+import pathy.Path
+import slamdata.Predef.{Stream => _, _}
 
 import cats.effect.Sync
-import scalaz.\/
+import scalaz.{\/, \/-, -\/}
 import scalaz.syntax.applicative._
 import scalaz.syntax.either._
 
@@ -53,16 +54,20 @@ class S3DataSource[F[_]: Sync] private (
       }
     }
 
-  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-  def children(path: ResourcePath): F[CommonError \/ Stream[F, (ResourceName, ResourcePathType)]] =
-    path match {
-      case Root => ???
-      case l @ Leaf(_) =>
-        impl.children(client, bucket, l.toPath) >>= {
-          case None => ???
-          case Some(paths) => ???
-        }
+  def children(path: ResourcePath): F[CommonError \/ Stream[F, (ResourceName, ResourcePathType)]] = {
+    val dir = path match {
+      case Root => Path.rootDir
+      case l @ Leaf(_) => l.toPath
     }
+
+    impl.children(client, bucket, dir) map {
+      case None => Stream.empty.covary[F].right[CommonError]
+      case Some(paths) => Stream.emits(paths.toList.map {
+        case -\/(Path.DirName(dn)) => (ResourceName(dn), ResourcePathType.ResourcePrefix)
+        case \/-(Path.FileName(fn)) => (ResourceName(fn), ResourcePathType.Resource)
+      }).covary[F].right[CommonError]
+    }
+  }
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def descendants(path: ResourcePath): F[CommonError \/ Stream[F, ResourcePath]] = ???
