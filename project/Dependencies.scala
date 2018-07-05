@@ -39,7 +39,12 @@ object Dependencies {
   // to keep from packaging it and its dependencies.
   // TODO: we should do this in the assembly routine.
   def lwc = lwcCore ++ Seq(
-    "com.slamdata" %% "quasar-mimir-internal" % quasarVersion
+    "com.slamdata" %% "quasar-mimir-internal" % quasarVersion,
+    "com.slamdata" %% "quasar-api-internal"   % quasarVersion % Test classifier "tests",
+    "com.slamdata" %% "quasar-foundation-internal" % quasarVersion % Test classifier "tests",
+    "org.specs2" %% "specs2-core" % specsVersion % Test,
+    "org.specs2" %% "specs2-scalaz" % specsVersion % Test,
+    "org.specs2" %% "specs2-scalacheck" % specsVersion % Test
   )
 
   // no extra dependencies for integration tests, for now.

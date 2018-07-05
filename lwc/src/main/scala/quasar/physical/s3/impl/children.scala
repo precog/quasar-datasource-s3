@@ -35,6 +35,7 @@ import cats.syntax.traverse._
 import cats.syntax.functor._
 import cats.syntax.foldable._
 import cats.syntax.eq._
+import cats.Functor
 import scalaz.{\/-, -\/}
 
 // So we have Eq[ADir], Eq[AFile]
@@ -48,7 +49,18 @@ object children {
   // could conceivably list *none* of the direct children of a
   // folder without pagination, depending on the order AWS
   // sends them in.
-  def apply[F[_]: Sync](client: Client[F], uri: Uri, dir: APath): F[Option[Set[PathSegment]]] = {
+  def apply[F[_]: Sync](client: Client[F], bucket: Uri, dir: APath): F[Option[List[PathSegment]]] = {
+    val FO = Functor[F].compose[Option]
+
+    val filtered =
+      FO.map(descendants(client, bucket, dir))(paths =>
+        paths.filter(path => Path.parentDir(path) === pathToDir(dir)))
+
+    FO.map(filtered)(paths => paths.flatMap(Path.peel(_).toList).map(_._2))
+  }
+
+
+  def descendants[F[_]: Sync](client: Client[F], bucket: Uri, dir: APath): F[Option[List[APath]]] = {
     // Converts a pathy Path to an S3 object prefix.
     val objectPrefix = aPathToObjectPrefix(dir)
 
@@ -57,7 +69,7 @@ object children {
     // `list-type=2` asks for the new version of the list api.
     // We only add the `objectPrefix` if it's not empty;
     // the S3 API doesn't understand empty `prefix`.
-    val listingQuery = (uri / "") withQueryParam ("list-type", 2)
+    val listingQuery = (bucket / "") withQueryParam ("list-type", 2)
     val queryUri =
       objectPrefix.fold(listingQuery)(prefix => listingQuery withQueryParam ("prefix", prefix))
 
@@ -92,23 +104,13 @@ object children {
         // Deal with some S3 idiosyncrasies.
         // TODO: Pagination
         result =
-        if (dir =!= Path.rootDir && !childPaths.contains_(dir)) None
-        else Some(
-          childPaths
-            .filter(path =>
-              // AWS includes the folder itself in the returned
-              // results, so we have to remove it.
-              // The same goes for files in folders *below*
-              // the listed folder.
-              path =!= dir && Path.parentDir(path) === pathToDir(dir))
-            // Take the file name or folder name of the
-            // child out of the full object path.
-            // TODO: Report an error when `Path.peel` fails,
-            // that's nonsense.
-            .flatMap(Path.peel(_).toList)
-            // Remove duplicates.
-            // TODO: Report an error if there are duplicates.
-            .map(_._2).toSet)
+        if (dir =!= Path.rootDir && !childPaths.contains_(dir))
+          None
+        else
+          Some(childPaths.filter(path => path =!= dir))
+        // AWS includes the folder itself in the returned
+        // results, so we have to remove it.
+        // TODO: Report an error if there are duplicates. Remove duplicates.
       } yield result
   }
 

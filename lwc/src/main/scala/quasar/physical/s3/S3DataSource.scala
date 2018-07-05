@@ -21,7 +21,7 @@ import fs2.Stream
 import org.http4s.Uri
 import org.http4s.client.Client
 import quasar.Data
-import quasar.api.DataSourceError.CommonError
+import quasar.api.ResourceError.CommonError
 import quasar.api.ResourceError
 import quasar.api.ResourcePath.{Leaf, Root}
 import quasar.api.{DataSourceType, ResourceName, ResourcePath, ResourcePathType}
@@ -36,7 +36,7 @@ import scalaz.syntax.either._
 
 import shims._
 
-class S3DataSource[F[_]: Sync] private (
+final class S3DataSource[F[_]: Sync] (
   client: Client[F],
   bucket: Uri,
   s3JsonParsing: S3JsonParsing) extends LightweightDataSource[F, Stream[F, ?], Stream[F, Data]] {
@@ -54,23 +54,21 @@ class S3DataSource[F[_]: Sync] private (
       }
     }
 
-  def children(path: ResourcePath): F[CommonError \/ Stream[F, (ResourceName, ResourcePathType)]] = {
-    val dir = path match {
-      case Root => Path.rootDir
-      case l @ Leaf(_) => l.toPath
-    }
 
-    impl.children(client, bucket, dir) map {
+  def children(path: ResourcePath): F[CommonError \/ Stream[F, (ResourceName, ResourcePathType)]] =
+    impl.children(client, bucket, path.toPath) map {
       case None => Stream.empty.covary[F].right[CommonError]
       case Some(paths) => Stream.emits(paths.toList.map {
         case -\/(Path.DirName(dn)) => (ResourceName(dn), ResourcePathType.ResourcePrefix)
         case \/-(Path.FileName(fn)) => (ResourceName(fn), ResourcePathType.Resource)
       }).covary[F].right[CommonError]
     }
-  }
 
-  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-  def descendants(path: ResourcePath): F[CommonError \/ Stream[F, ResourcePath]] = ???
+  def descendants(path: ResourcePath): F[CommonError \/ Stream[F, ResourcePath]] =
+    impl.children.descendants(client, bucket, path.toPath) map {
+      case None => Stream.empty.covary[F].right[CommonError]
+      case Some(paths) => Stream.emits(paths.map(ResourcePath.fromPath(_))).covary[F].right[CommonError]
+    }
 
   def isResource(path: ResourcePath): F[Boolean] = path match {
     case Root => false.point[F]
