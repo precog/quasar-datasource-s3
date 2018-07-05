@@ -17,6 +17,7 @@ object Dependencies {
   // we need to be compatible with Quasar's version of both
   // fs2 and jawn, so we use the older circe-jawn version.
   private val circeJawnVersion = "0.10.0-M1"
+  private val fs2Version       = "1.0.0-M1"
 
   private val quasarVersion = IO.read(file("./quasar-version")).trim
 
@@ -28,23 +29,23 @@ object Dependencies {
   // quasar's http4s version. The same goes for any
   // dependencies, transitive or otherwise.
   def lwcCore = Seq(
-    "org.http4s"             %% "http4s-scala-xml"    % http4sVersion,
-    "org.http4s"             %% "http4s-blaze-client" % http4sVersion,
-    "org.scala-lang.modules" %% "scala-xml"           % scalaXmlVersion,
-    "io.circe"               %% "circe-jawn"          % circeJawnVersion,
-    "com.codecommit"         %% "shims-effect"        % shimsVersion
+    "org.http4s"             %% "http4s-scala-xml"           % http4sVersion,
+    "org.http4s"             %% "http4s-blaze-client"        % http4sVersion,
+    "org.scala-lang.modules" %% "scala-xml"                  % scalaXmlVersion,
+    "io.circe"               %% "circe-jawn"                 % circeJawnVersion,
+    "com.codecommit"         %% "shims-effect"               % shimsVersion,
+    "org.specs2"             %% "specs2-core"                % specsVersion  % Test,
+    "org.specs2"             %% "specs2-scalaz"              % specsVersion  % Test,
+    "org.specs2"             %% "specs2-scalacheck"          % specsVersion  % Test,
+    "com.slamdata"           %% "quasar-api-internal"        % quasarVersion % Test,
+    "com.slamdata"           %% "quasar-foundation-internal" % quasarVersion % Test
   )
 
   // we need to separate quasar out from the LWC dependencies,
   // to keep from packaging it and its dependencies.
   // TODO: we should do this in the assembly routine.
   def lwc = lwcCore ++ Seq(
-    "com.slamdata" %% "quasar-mimir-internal" % quasarVersion,
-    "com.slamdata" %% "quasar-api-internal"   % quasarVersion % Test classifier "tests",
-    "com.slamdata" %% "quasar-foundation-internal" % quasarVersion % Test classifier "tests",
-    "org.specs2" %% "specs2-core" % specsVersion % Test,
-    "org.specs2" %% "specs2-scalaz" % specsVersion % Test,
-    "org.specs2" %% "specs2-scalacheck" % specsVersion % Test
+    "com.slamdata" %% "quasar-api-internal" % quasarVersion
   )
 
   // no extra dependencies for integration tests, for now.

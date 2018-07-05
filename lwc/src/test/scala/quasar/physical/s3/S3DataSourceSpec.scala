@@ -27,8 +27,6 @@ import org.http4s.client.blaze.Http1Client
 import org.http4s.Uri
 
 final class S3DataSourceSpec extends ResourceDiscoverySpec[IO, Stream[IO, ?]] {
-  val run = λ[IO ~> Id](_.unsafeRunSync)
-
   val discovery = new S3DataSource[IO](
     Http1Client[IO]().unsafeRunSync,
     Uri.unsafeFromString("http://s3-lwc-test.s3.amazonaws.com"),
@@ -36,6 +34,8 @@ final class S3DataSourceSpec extends ResourceDiscoverySpec[IO, Stream[IO, ?]] {
 
   val nonExistentPath =
     ResourcePath.root() / ResourceName("does") / ResourceName("not") / ResourceName("exist")
+
+  val run = λ[IO ~> Id](_.unsafeRunSync)
 }
 
 object S3DataSourceSpec {
