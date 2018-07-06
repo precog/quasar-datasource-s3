@@ -36,16 +36,18 @@ object Dependencies {
     "com.codecommit"         %% "shims-effect"               % shimsVersion,
     "org.specs2"             %% "specs2-core"                % specsVersion  % Test,
     "org.specs2"             %% "specs2-scalaz"              % specsVersion  % Test,
-    "org.specs2"             %% "specs2-scalacheck"          % specsVersion  % Test,
-    "com.slamdata"           %% "quasar-api-internal"        % quasarVersion % Test,
-    "com.slamdata"           %% "quasar-foundation-internal" % quasarVersion % Test
+    "org.specs2"             %% "specs2-scalacheck"          % specsVersion  % Test
   )
 
   // we need to separate quasar out from the LWC dependencies,
   // to keep from packaging it and its dependencies.
   // TODO: we should do this in the assembly routine.
   def lwc = lwcCore ++ Seq(
-    "com.slamdata" %% "quasar-api-internal" % quasarVersion
+    "com.slamdata" %% "quasar-api-internal"        % quasarVersion,
+    "com.slamdata" %% "quasar-api-internal"        % quasarVersion % Test classifier "tests",
+    "com.slamdata" %% "quasar-foundation-internal" % quasarVersion,
+    "com.slamdata" %% "quasar-foundation-internal" % quasarVersion % Test classifier "tests",
+    "com.slamdata" %% "quasar-connector-internal"  % quasarVersion,
   )
 
   // no extra dependencies for integration tests, for now.
