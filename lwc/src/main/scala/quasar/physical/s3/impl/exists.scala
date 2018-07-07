@@ -19,7 +19,8 @@ package quasar.physical.s3.impl
 import slamdata.Predef._
 
 import org.http4s.client.Client
-import org.http4s.{Method, Request, Status, Uri}
+import org.http4s.{Method, Request, Status, Uri, Headers}
+import org.http4s.headers.Range
 import pathy.Path
 import quasar.contrib.pathy._
 import cats.effect.Sync
@@ -38,13 +39,18 @@ object exists {
     val queryUri = uri / objectPath
 
     // Request with HEAD, to get metadata.
-    val request = Request[F](uri = queryUri, method = Method.HEAD)
+    // attempt to get the first byte to verify this is not empty
+    val request = Request[F]()
+      .withUri(queryUri)
+      .withMethod(Method.HEAD)
+      .withHeaders(Headers(Range(0, 1)))
 
     // Don't use the metadata, just check if the request
     // returns a 404.
     client.status(request) >>= {
       case Status.Ok => true.pure[F]
       case Status.NotFound => false.pure[F]
+      case Status.RangeNotSatisfiable => false.pure[F]
       case s => Sync[F].raiseError(new Exception(s"Unexpected status returned during `exists` call: $s")) // TODO: fail somehow else
     }
   }

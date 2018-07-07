@@ -17,7 +17,7 @@ object Dependencies {
   // we need to be compatible with Quasar's version of both
   // fs2 and jawn, so we use the older circe-jawn version.
   private val circeJawnVersion = "0.10.0-M1"
-  private val fs2Version       = "1.0.0-M1"
+  private val fs2Version       = "0.10.5"
 
   private val quasarVersion = IO.read(file("./quasar-version")).trim
 
@@ -25,6 +25,7 @@ object Dependencies {
 
   private val shimsVersion = "1.3.0"
   private val argonautVersion = "6.2"
+  private val catsEffectVersion = "0.10.1"
 
   // http4s-blaze-client's version has to be in sync with
   // quasar's http4s version. The same goes for any
@@ -35,9 +36,10 @@ object Dependencies {
     "org.scala-lang.modules" %% "scala-xml"           % scalaXmlVersion,
     "io.circe"               %% "circe-jawn"          % circeJawnVersion,
     "com.codecommit"         %% "shims-effect"        % shimsVersion,
-    "org.specs2"             %% "specs2-core"         % specsVersion  % Test,
-    "org.specs2"             %% "specs2-scalaz"       % specsVersion  % Test,
-    "org.specs2"             %% "specs2-scalacheck"   % specsVersion  % Test,
+    "org.typelevel"          %% "cats-effect"         % catsEffectVersion,
+    "org.specs2"             %% "specs2-core"         % specsVersion % Test,
+    "org.specs2"             %% "specs2-scalaz"       % specsVersion % Test,
+    "org.specs2"             %% "specs2-scalacheck"   % specsVersion % Test,
     "io.argonaut"            %% "argonaut"            % argonautVersion
   )
 

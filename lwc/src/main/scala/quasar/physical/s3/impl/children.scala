@@ -29,6 +29,7 @@ import scala.xml
 import cats.effect.Sync
 import cats.instances.list._
 import cats.instances.option._
+import cats.instances.int._
 import cats.syntax.option._
 import cats.syntax.flatMap._
 import cats.syntax.traverse._
@@ -87,6 +88,7 @@ object children {
                 Sync[F].raiseError(new Exception("XML received from AWS API has no top-level <Contents> element", ex))
             }
           }
+
           // Grab all of the <Key> elements from <Contents>.
           names <- contents.toList.traverse[F, String] { elem =>
             try {
@@ -98,6 +100,7 @@ object children {
           }
         } yield names
 
+
         // Convert S3 object names to paths.
         childPaths <- children.traverse(s3NameToPath)
           .fold(Sync[F].raiseError[List[APath]](new Exception(s"Failed to parse object path in S3 API response")))(Sync[F].pure)
@@ -106,13 +109,15 @@ object children {
         result =
         if (dir =!= Path.rootDir && !childPaths.contains_(dir))
           None
-        else
+        else {
           Some(childPaths.filter(path => path =!= dir))
+        }
         // AWS includes the folder itself in the returned
         // results, so we have to remove it.
         // TODO: Report an error if there are duplicates. Remove duplicates.
       } yield result
   }
+
 
   private def aPathToObjectPrefix(apath: APath): Option[String] = {
     // Don't provide an object prefix if listing the
@@ -146,6 +151,7 @@ object children {
     Path.peel(path) match {
       case Some((d, \/-(FileName(fn)))) => (d </> Path.dir(fn)).some
       case Some((d, -\/(DirName(dn)))) => (d </> Path.dir(dn)).some
+      case None if Path.depth(path) === 0 => Path.rootDir.some
       case _ => none
     }
 }

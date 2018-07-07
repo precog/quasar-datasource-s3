@@ -23,17 +23,34 @@ import quasar.connector.{DataSource, LightweightDataSourceModule}
 import quasar.api.DataSourceError.InitializationError
 
 import argonaut.Json
-import cats.effect.{ConcurrentEffect, Timer}
+import cats.effect.{Timer, ConcurrentEffect}
 import eu.timepit.refined.auto._
 import fs2.Stream
 import scalaz.\/
+// import scalaz.syntax.either._
+// import scalaz.syntax.applicative._
+import slamdata.Predef.{Stream => _, _}
+// import shims._
 
 object S3DataSourceModule extends LightweightDataSourceModule {
   def kind: DataSourceType = DataSourceType("remote", 1L)
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def lightweightDataSource[
       F[_]: ConcurrentEffect: Timer,
       G[_]: ConcurrentEffect: Timer](
       config: Json)
-      : F[InitializationError[Json] \/ DataSource[F, Stream[G, ?], ResourcePath, Stream[G, Data]]] = slamdata.Predef.???
+      : F[InitializationError[Json] \/ DataSource[F, Stream[G, ?], ResourcePath, Stream[G, Data]]] = {
+    config.as[S3Config].result match {
+      case Right(s3Config) => {
+        // val ds: DataSource[F, Stream[F, ?], ResourcePath, Stream[F, Data]] =
+        //   new S3DataSource[F](???, s3Config.bucket, s3Config.parsing)
+
+        // ds.right[InitializationError[Json]].point[F]
+        ???
+      }
+
+      case Left((msg, history)) => slamdata.Predef.???
+    }
+  }
 }

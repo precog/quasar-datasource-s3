@@ -57,16 +57,18 @@ final class S3DataSource[F[_]: Sync] (
 
   def children(path: ResourcePath): F[CommonError \/ Stream[F, (ResourceName, ResourcePathType)]] =
     impl.children(client, bucket, path.toPath) map {
-      case None => Stream.empty.covary[F].right[CommonError]
-      case Some(paths) => Stream.emits(paths.toList.map {
-        case -\/(Path.DirName(dn)) => (ResourceName(dn), ResourcePathType.ResourcePrefix)
-        case \/-(Path.FileName(fn)) => (ResourceName(fn), ResourcePathType.Resource)
-      }).covary[F].right[CommonError]
+      case None =>
+        ResourceError.pathNotFound(path).left[Stream[F, (ResourceName, ResourcePathType)]]
+      case Some(paths) =>
+        Stream.emits(paths.toList.map {
+          case -\/(Path.DirName(dn)) => (ResourceName(dn), ResourcePathType.ResourcePrefix)
+          case \/-(Path.FileName(fn)) => (ResourceName(fn), ResourcePathType.Resource)
+        }).covary[F].right[CommonError]
     }
 
   def descendants(path: ResourcePath): F[CommonError \/ Stream[F, ResourcePath]] =
     impl.children.descendants(client, bucket, path.toPath) map {
-      case None => Stream.empty.covary[F].right[CommonError]
+      case None => ResourceError.pathNotFound(path).left[Stream[F, ResourcePath]]
       case Some(paths) => Stream.emits(paths.map(ResourcePath.fromPath(_))).covary[F].right[CommonError]
     }
 

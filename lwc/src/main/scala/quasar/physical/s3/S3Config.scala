@@ -21,17 +21,15 @@ import argonaut.{DecodeJson, DecodeResult}
 import org.http4s.Uri
 import cats.syntax.apply._
 import cats.instances.option._
-
-import shims._
+import slamdata.Predef._
 
 final case class S3Config(bucket: Uri, parsing: S3JsonParsing)
 
 object S3Config {
-
   private val parseStrings =
-    Map(
+    Map[String, S3JsonParsing](
       "array" -> S3JsonParsing.JsonArray,
-      "lineDelimited" -> S3JsonParsing.JsonArray)
+      "lineDelimited" -> S3JsonParsing.LineDelimited)
 
   private val failureMessage = "Failed to parse configuration for S3 connector."
 
