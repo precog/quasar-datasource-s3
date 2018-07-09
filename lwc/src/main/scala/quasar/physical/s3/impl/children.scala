@@ -36,10 +36,9 @@ import cats.syntax.traverse._
 import cats.syntax.functor._
 import cats.syntax.foldable._
 import cats.syntax.eq._
+import cats.syntax.monadError._
 import cats.Functor
 import scalaz.{\/-, -\/}
-
-// So we have Eq[ADir], Eq[AFile]
 import shims._
 
 object children {
@@ -61,6 +60,7 @@ object children {
   }
 
 
+  // Lists all objects and prefixes in a bucket. This needs to be filtered
   def descendants[F[_]: Sync](client: Client[F], bucket: Uri, dir: APath): F[Option[List[APath]]] = {
     // Converts a pathy Path to an S3 object prefix.
     val objectPrefix = aPathToObjectPrefix(dir)
@@ -81,29 +81,26 @@ object children {
         children <- for {
           contents <- Sync[F].suspend {
             // Grab <Contents>.
-            try {
-              Sync[F].pure(topLevelElem \\ "Contents")
-            } catch {
-              case ex: Exception =>
-                Sync[F].raiseError(new Exception("XML received from AWS API has no top-level <Contents> element", ex))
-            }
+            Sync[F].catchNonFatal((topLevelElem \\ "Contents"))
+              .adaptError {
+                case ex: Exception =>
+                  new Exception("XML received from AWS API has no top-level <Contents>", ex)
+              }
           }
 
           // Grab all of the <Key> elements from <Contents>.
           names <- contents.toList.traverse[F, String] { elem =>
-            try {
-              Sync[F].pure((elem \\ "Key").text)
-            } catch {
-              case ex: Exception =>
-                Sync[F].raiseError(new Exception("XML received from AWS API has no <Key> elements under <Contents>", ex))
-            }
+            Sync[F].catchNonFatal((elem \\ "Key").text)
+              .adaptError {
+                case ex: Exception =>
+                  new Exception("XML received from AWS API has no <Key> elements under <Contents>", ex)
+              }
           }
         } yield names
 
-
         // Convert S3 object names to paths.
         childPaths <- children.traverse(s3NameToPath)
-          .fold(Sync[F].raiseError[List[APath]](new Exception(s"Failed to parse object path in S3 API response")))(Sync[F].pure)
+        .fold(Sync[F].raiseError[List[APath]](new Exception(s"Failed to parse object path in S3 API response")))(Sync[F].pure)
         // Deal with some S3 idiosyncrasies.
         // TODO: Pagination
         result =
@@ -117,7 +114,6 @@ object children {
         // TODO: Report an error if there are duplicates. Remove duplicates.
       } yield result
   }
-
 
   private def aPathToObjectPrefix(apath: APath): Option[String] = {
     // Don't provide an object prefix if listing the
