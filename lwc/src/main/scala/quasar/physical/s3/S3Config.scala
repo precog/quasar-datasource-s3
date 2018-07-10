@@ -20,6 +20,7 @@ import slamdata.Predef._
 import argonaut.{DecodeJson, DecodeResult}
 import org.http4s.Uri
 import cats.syntax.apply._
+import cats.syntax.flatMap._
 import cats.instances.option._
 import slamdata.Predef._
 
@@ -35,13 +36,12 @@ object S3Config {
 
   implicit val decodeJson: DecodeJson[S3Config] =
     DecodeJson { c =>
-      val parsed = (c.get[String]("bucket").toOption, c.get[String]("jsonParsing").toOption).mapN {
-        case (b, jp) => (Uri.fromString(b).toOption, parseStrings.get(jp)).mapN {
-          case (u, p) => S3Config(u, p)
-        }
-      }.flatten
+      val b = c.get[String]("bucket").toOption >>= (Uri.fromString(_).toOption)
+      val jp = c.get[String]("jsonParsing").toOption >>= (parseStrings.get(_))
 
-      parsed match {
+      (b, jp).mapN {
+        case (u, p) => S3Config(u, p)
+      } match {
         case Some(config) => DecodeResult.ok(config)
         case None => DecodeResult.fail(failureMessage, c.history)
       }

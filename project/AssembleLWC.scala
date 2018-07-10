@@ -141,7 +141,7 @@ object AssembleLWC {
         cpJson = classPath.map(s => "\"" + s + "\"").mkString("[\n    ", ",\n    ", "\n  ]")
 
         // include the LWC jar and classpath into the .plugin file
-        outJson = s"""{\n  "main_jar": "$relativeLWCJarPath",\n  "classpath": $cpJson\n}"""
+        outJson = s"""{\n  "mainJar": "$relativeLWCJarPath",\n  "classPath": $cpJson\n}"""
 
         // delete an old .plugin file, write the new one
         _ <- Task.delay {

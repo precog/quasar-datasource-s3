@@ -29,7 +29,7 @@ import cats.syntax.applicative._
 
 // The simplest method to implement, check that HEAD doesn't
 // give a 404.
-object exists {
+object isResource {
   def apply[F[_]: Sync](client: Client[F], uri: Uri, file: AFile): F[Boolean] = {
     // Print pathy.Path as POSIX path, without leading slash,
     // for S3's consumption.

@@ -50,10 +50,10 @@ final class S3DataSource[F[_]: Effect, G[_]: Async] (
   def evaluate(path: ResourcePath): F[ReadError \/ Stream[G, Data]] =
     path match {
       case Root => ResourceError.notAResource(path).left.point[F]
-      case Leaf(file) => impl.read[F](s3JsonParsing, client, bucket, file) map {
+      case Leaf(file) => impl.evaluate[F](s3JsonParsing, client, bucket, file) map {
         case None => (ResourceError.pathNotFound(Leaf(file)): ReadError).left
         /* In http4s, the type of streaming results is the same as
-         every other effectful operation However,
+         every other effectful operation. However,
          LightweightDataSourceModule forces us to separate the types
          so we need to translate */
         case Some(s) => s.translate[G](FToG).right[ReadError]
@@ -74,7 +74,7 @@ final class S3DataSource[F[_]: Effect, G[_]: Async] (
 
   def isResource(path: ResourcePath): F[Boolean] = path match {
     case Root => false.point[F]
-    case Leaf(file) => impl.exists(client, bucket, file)
+    case Leaf(file) => impl.isResource(client, bucket, file)
   }
 
   private val FToG: FunctionK[F, G] = new FunctionK[F, G] {

@@ -34,8 +34,7 @@ import cats.syntax.option._
 import cats.syntax.flatMap._
 import cats.syntax.applicative._
 
-object read {
-
+object evaluate {
   // circe's streaming parser, which we select based on the
   // passed S3JsonParsing
   private def circePipe[F[_]](jsonParsing: S3JsonParsing): Pipe[F, Byte, Json] = jsonParsing match {

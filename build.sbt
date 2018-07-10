@@ -171,6 +171,11 @@ lazy val root = project.in(file("."))
 
 // common components
 
+// Quasar needs to know where the DataSourceModule for the connector is
+lazy val manifestSettings =
+  packageOptions in (Compile, packageBin) +=
+    Package.ManifestAttributes("DataSource-Module" -> "quasar.physical.s3.S3DataSourceModule")
+
 /** Lightweight connector module.
   */
 lazy val lwc = project
@@ -187,6 +192,7 @@ lazy val lwc = project
   .settings(githubReleaseSettings)
   .settings(excludeTypelevelScalaLibrary)
   .settings(AssembleLWC.setAssemblyKey)
+  .settings(manifestSettings)
   .enablePlugins(AutomateHeaderPlugin)
 
 /** A project with a properly configured `console`

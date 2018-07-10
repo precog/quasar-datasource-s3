@@ -36,7 +36,6 @@ import shims._
 object S3DataSourceModule extends LightweightDataSourceModule {
   def kind: DataSourceType = DataSourceType("remote", 1L)
 
-  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def lightweightDataSource[
       F[_]: ConcurrentEffect: Timer,
       G[_]: ConcurrentEffect: Timer](
