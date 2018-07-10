@@ -20,17 +20,18 @@ package quasar.physical.s3
 import quasar.Data
 import quasar.api.{DataSourceType, ResourcePath}
 import quasar.connector.{DataSource, LightweightDataSourceModule}
-import quasar.api.DataSourceError.InitializationError
+import quasar.api.DataSourceError.{InitializationError, MalformedConfiguration}
 
 import argonaut.Json
 import cats.effect.{Timer, ConcurrentEffect}
 import eu.timepit.refined.auto._
 import fs2.Stream
 import scalaz.\/
-// import scalaz.syntax.either._
-// import scalaz.syntax.applicative._
+import scalaz.syntax.either._
+import scalaz.syntax.applicative._
 import slamdata.Predef.{Stream => _, _}
-// import shims._
+import org.http4s.client.blaze.Http1Client
+import shims._
 
 object S3DataSourceModule extends LightweightDataSourceModule {
   def kind: DataSourceType = DataSourceType("remote", 1L)
@@ -43,14 +44,17 @@ object S3DataSourceModule extends LightweightDataSourceModule {
       : F[InitializationError[Json] \/ DataSource[F, Stream[G, ?], ResourcePath, Stream[G, Data]]] = {
     config.as[S3Config].result match {
       case Right(s3Config) => {
-        // val ds: DataSource[F, Stream[F, ?], ResourcePath, Stream[F, Data]] =
-        //   new S3DataSource[F](???, s3Config.bucket, s3Config.parsing)
+        Http1Client[F]() map { client =>
+          val ds: DataSource[F, Stream[G, ?], ResourcePath, Stream[G, Data]] =
+            new S3DataSource[F, G](client, s3Config.bucket, s3Config.parsing)
 
-        // ds.right[InitializationError[Json]].point[F]
-        ???
+          ds.right[InitializationError[Json]]
+        }
       }
 
-      case Left((msg, history)) => slamdata.Predef.???
+      case Left((msg, _)) =>
+        (MalformedConfiguration(kind, config, msg): InitializationError[Json])
+          .left[DataSource[F, Stream[G, ?], ResourcePath, Stream[G, Data]]].point[F]
     }
   }
 }

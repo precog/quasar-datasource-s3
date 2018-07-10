@@ -54,12 +54,12 @@ final class S3DataSourceSpec extends ResourceDiscoverySpec[IO, Stream[IO, ?]] {
     }
   }
 
-  val discoveryLD = new S3DataSource[IO](
+  val discoveryLD = new S3DataSource[IO, IO](
     Http1Client[IO]().unsafeRunSync,
     Uri.unsafeFromString("http://qconnector-tests.s3.amazonaws.com"),
     S3JsonParsing.LineDelimited)
 
-  val discovery = new S3DataSource[IO](
+  val discovery = new S3DataSource[IO, IO](
     Http1Client[IO]().unsafeRunSync,
     Uri.unsafeFromString("http://qconnector-tests.s3.amazonaws.com"),
     S3JsonParsing.JsonArray)

@@ -21,7 +21,7 @@ import fs2.Stream
 import org.http4s.Uri
 import org.http4s.client.Client
 import quasar.Data
-import quasar.api.ResourceError.CommonError
+import quasar.api.ResourceError.{CommonError, ReadError}
 import quasar.api.ResourceError
 import quasar.api.ResourcePath.{Leaf, Root}
 import quasar.api.{DataSourceType, ResourceName, ResourcePath, ResourcePathType}
@@ -29,51 +29,55 @@ import quasar.connector.datasource.LightweightDataSource
 import pathy.Path
 import slamdata.Predef.{Stream => _, _}
 
-import cats.effect.Sync
+import cats.effect.{Effect, LiftIO, Async}
+import cats.arrow.FunctionK
 import scalaz.{\/, \/-, -\/}
 import scalaz.syntax.applicative._
 import scalaz.syntax.either._
 
 import shims._
 
-final class S3DataSource[F[_]: Sync] (
+final class S3DataSource[F[_]: Effect, G[_]: Async] (
   client: Client[F],
   bucket: Uri,
-  s3JsonParsing: S3JsonParsing) extends LightweightDataSource[F, Stream[F, ?], Stream[F, Data]] {
+  s3JsonParsing: S3JsonParsing)
+    extends LightweightDataSource[F, Stream[G, ?], Stream[G, Data]] {
 
   def kind: DataSourceType = DataSourceType("remote", 1L)
 
   val shutdown: F[Unit] = client.shutdown
 
-  def evaluate(path: ResourcePath): F[ResourceError.ReadError \/ Stream[F, Data]] =
+  def evaluate(path: ResourcePath): F[ReadError \/ Stream[G, Data]] =
     path match {
       case Root => ResourceError.notAResource(path).left.point[F]
       case Leaf(file) => impl.read[F](s3JsonParsing, client, bucket, file) map {
-        case None => (ResourceError.pathNotFound(Leaf(file)): ResourceError.ReadError).left
-        case Some(s) => s.right
+        case None => (ResourceError.pathNotFound(Leaf(file)): ReadError).left
+        /* In http4s, the type of streaming results is the same as
+         every other effectful operation However,
+         LightweightDataSourceModule forces us to separate the types
+         so we need to translate */
+        case Some(s) => s.translate[G](FToG).right[ReadError]
       }
     }
 
 
-  def children(path: ResourcePath): F[CommonError \/ Stream[F, (ResourceName, ResourcePathType)]] =
+  def children(path: ResourcePath): F[CommonError \/ Stream[G, (ResourceName, ResourcePathType)]] =
     impl.children(client, bucket, path.toPath) map {
       case None =>
-        ResourceError.pathNotFound(path).left[Stream[F, (ResourceName, ResourcePathType)]]
+        ResourceError.pathNotFound(path).left[Stream[G, (ResourceName, ResourcePathType)]]
       case Some(paths) =>
         Stream.emits(paths.toList.map {
           case -\/(Path.DirName(dn)) => (ResourceName(dn), ResourcePathType.ResourcePrefix)
           case \/-(Path.FileName(fn)) => (ResourceName(fn), ResourcePathType.Resource)
-        }).covary[F].right[CommonError]
-    }
-
-  def descendants(path: ResourcePath): F[CommonError \/ Stream[F, ResourcePath]] =
-    impl.children.descendants(client, bucket, path.toPath) map {
-      case None => ResourceError.pathNotFound(path).left[Stream[F, ResourcePath]]
-      case Some(paths) => Stream.emits(paths.map(ResourcePath.fromPath(_))).covary[F].right[CommonError]
+        }).covary[G].right[CommonError]
     }
 
   def isResource(path: ResourcePath): F[Boolean] = path match {
     case Root => false.point[F]
     case Leaf(file) => impl.exists(client, bucket, file)
+  }
+
+  private val FToG: FunctionK[F, G] = new FunctionK[F, G] {
+    def apply[A](fa: F[A]): G[A] = LiftIO[G].liftIO(Effect[F].toIO(fa))
   }
 }
