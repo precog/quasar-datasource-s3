@@ -166,7 +166,7 @@ lazy val root = project.in(file("."))
   .settings(transferPublishAndTagResources)
   .settings(aggregate in assembly := false)
   .settings(excludeTypelevelScalaLibrary)
-  .aggregate(lwc, repl, it)
+  .aggregate(lwc)
   .enablePlugins(AutomateHeaderPlugin)
 
 // common components
@@ -174,7 +174,7 @@ lazy val root = project.in(file("."))
 // Quasar needs to know where the DataSourceModule for the connector is
 lazy val manifestSettings =
   packageOptions in (Compile, packageBin) +=
-    Package.ManifestAttributes("DataSource-Module" -> "quasar.physical.s3.S3DataSourceModule")
+    Package.ManifestAttributes("DataSource-Module" -> "quasar.physical.s3.S3DataSourceModule$")
 
 /** Lightweight connector module.
   */
@@ -195,40 +195,3 @@ lazy val lwc = project
   .settings(manifestSettings)
   .enablePlugins(AutomateHeaderPlugin)
 
-/** A project with a properly configured `console`
-  */
-lazy val repl = project
-  .settings(name := "quasar-repl")
-  .dependsOn(lwc)
-  .settings(commonSettings)
-  .settings(noPublishSettings)
-  .settings(targetSettings)
-  .settings(excludeTypelevelScalaLibrary)
-  .settings(
-    console := (console in Test).value,
-    scalacOptions --= Seq("-Yno-imports", "-Ywarn-unused:imports", "-Xfatal-warnings"),
-    initialCommands in console += """
-    |import quasar.physical.s3._
-    |import quasar.fs.mount._
-    |import pathy.Path
-    |import scalaz._, Scalaz._, scalaz.concurrent.Task
-    """.stripMargin.trim
-  )
-  .enablePlugins(AutomateHeaderPlugin)
-
-/** S3-specific integration tests
-  */
-lazy val it = project
-  .settings(name := "quasar-s3-it")
-  .configs(ExclusiveTests)
-  .dependsOn(lwc)
-  .settings(commonSettings)
-  .settings(publishTestsSettings)
-  .settings(targetSettings)
-  .settings(libraryDependencies ++= Dependencies.it)
-  // Configure various test tasks to run exclusively in the `ExclusiveTests` config.
-  .settings(inConfig(ExclusiveTests)(Defaults.testTasks): _*)
-  .settings(inConfig(ExclusiveTests)(exclusiveTasks(test, testOnly, testQuick)): _*)
-  .settings(parallelExecution in Test := false)
-  .settings(excludeTypelevelScalaLibrary)
-  .enablePlugins(AutomateHeaderPlugin)

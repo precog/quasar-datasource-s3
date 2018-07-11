@@ -49,6 +49,7 @@ object isResource {
     // returns a 404.
     client.status(request) >>= {
       case Status.Ok => true.pure[F]
+      case Status.PartialContent => true.pure[F]
       case Status.NotFound => false.pure[F]
       case Status.RangeNotSatisfiable => false.pure[F]
       case s => Sync[F].raiseError(new Exception(s"Unexpected status returned during `exists` call: $s")) // TODO: fail somehow else

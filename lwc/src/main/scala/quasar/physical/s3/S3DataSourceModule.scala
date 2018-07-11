@@ -34,7 +34,7 @@ import org.http4s.client.blaze.Http1Client
 import shims._
 
 object S3DataSourceModule extends LightweightDataSourceModule {
-  def kind: DataSourceType = DataSourceType("remote", 1L)
+  val kind: DataSourceType = DataSourceType("s3", 1L)
 
   def lightweightDataSource[
       F[_]: ConcurrentEffect: Timer,

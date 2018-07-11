@@ -61,7 +61,7 @@ object children {
 
 
   // Lists all objects and prefixes in a bucket. This needs to be filtered
-  def descendants[F[_]: Sync](client: Client[F], bucket: Uri, dir: APath): F[Option[List[APath]]] = {
+  private def descendants[F[_]: Sync](client: Client[F], bucket: Uri, dir: APath): F[Option[List[APath]]] = {
     // Converts a pathy Path to an S3 object prefix.
     val objectPrefix = aPathToObjectPrefix(dir)
 

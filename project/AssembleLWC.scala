@@ -135,7 +135,7 @@ object AssembleLWC {
 
         // the .plugin file requires all dependency jar paths
         // to be relative to the plugins folder
-        classPath = fetchedJarFiles.map(p => lwcPluginsFolder.toPath.relativize(p.toPath))
+        classPath = fetchedJarFiles.map(p => lwcPluginsFolder.toPath.relativize(p.toPath)) ++ Seq(relativeLWCJarPath)
 
         // format the classPath as readable json for the .plugin file
         cpJson = classPath.map(s => "\"" + s + "\"").mkString("[\n    ", ",\n    ", "\n  ]")
