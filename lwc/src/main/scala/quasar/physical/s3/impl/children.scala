@@ -92,7 +92,7 @@ object children {
           }
 
           keyCount <- Sync[F].suspend {
-            // Grab <Contents>.
+            // Grab <KeyCount> to ensure this response is not empty.
             Sync[F].catchNonFatal((topLevelElem \\ "KeyCount").text.toInt)
               .adaptError {
                 case ex: Exception =>
