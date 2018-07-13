@@ -27,17 +27,19 @@ import quasar.api.ResourcePath.{Leaf, Root}
 import quasar.api.{DataSourceType, ResourceName, ResourcePath, ResourcePathType}
 import quasar.connector.datasource.LightweightDataSource
 import quasar.contrib.pathy.APath
+import quasar.contrib.cats.effect._
 import pathy.Path
 import Path.{DirName, FileName}
 import slamdata.Predef.{Stream => _, _}
 
-import cats.effect.{Effect, LiftIO, Async}
+import cats.effect.{Effect, Async}
 import cats.arrow.FunctionK
 import scalaz.{\/, \/-, -\/}
 import scalaz.syntax.applicative._
 import scalaz.syntax.either._
 
 import shims._
+import scala.concurrent.ExecutionContext.Implicits.global
 
 final class S3DataSource[F[_]: Effect, G[_]: Async] (
   client: Client[F],
@@ -91,6 +93,6 @@ final class S3DataSource[F[_]: Effect, G[_]: Async] (
     }
 
   private val FToG: FunctionK[F, G] = new FunctionK[F, G] {
-    def apply[A](fa: F[A]): G[A] = LiftIO[G].liftIO(Effect[F].toIO(fa))
+    def apply[A](fa: F[A]): G[A] = fa.to[G]
   }
 }

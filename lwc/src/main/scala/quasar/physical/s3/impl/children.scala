@@ -160,8 +160,6 @@ object children {
 
   private def pathToDir(path: APath): Option[ADir] =
     Path.peel(path) match {
-      case Some((d, \/-(FileName(fn)))) if fn.isEmpty => d.some
-      case Some((d, -\/(DirName(dn)))) if dn.isEmpty => d.some
       case Some((d, \/-(FileName(fn)))) => (d </> Path.dir(fn)).some
       case Some((d, -\/(DirName(dn)))) => (d </> Path.dir(dn)).some
       case None if Path.depth(path) === 0 => Path.rootDir.some

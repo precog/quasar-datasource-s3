@@ -22,24 +22,24 @@ import quasar.Data
 import quasar.contrib.pathy._
 import quasar.physical.s3.S3JsonParsing
 
+import cats.effect.Sync
+import cats.syntax.applicative._
+import cats.syntax.flatMap._
+import cats.syntax.option._
 import fs2.{Pipe, Stream}
 import io.circe.Json
+import io.circe.fs2.{byteArrayParser, byteStreamParser}
 import org.http4s.client._
 import org.http4s.{Request, Response, Status, Uri}
 import pathy.Path
 import shims._
 
-import cats.effect.Sync
-import cats.syntax.option._
-import cats.syntax.flatMap._
-import cats.syntax.applicative._
-
 object evaluate {
   // circe's streaming parser, which we select based on the
   // passed S3JsonParsing
   private def circePipe[F[_]](jsonParsing: S3JsonParsing): Pipe[F, Byte, Json] = jsonParsing match {
-    case S3JsonParsing.JsonArray => parsing.byteArrayParser[F]
-    case S3JsonParsing.LineDelimited => parsing.byteStreamParser[F]
+    case S3JsonParsing.JsonArray => byteArrayParser[F]
+    case S3JsonParsing.LineDelimited => byteStreamParser[F]
   }
 
   // as it says on the tin, converts circe's JSON type to
