@@ -48,6 +48,8 @@ object children {
   // could conceivably list *none* of the direct children of a
   // folder without pagination, depending on the order AWS
   // sends them in.
+  //
+  // FIXME: dir should be ADir and pathToDir should be deleted
   def apply[F[_]: Sync](client: Client[F], bucket: Uri, dir: APath): F[Option[List[PathSegment]]] = {
     val FO = Functor[F].compose[Option]
 
