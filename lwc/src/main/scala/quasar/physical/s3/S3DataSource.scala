@@ -26,7 +26,9 @@ import quasar.api.ResourceError
 import quasar.api.ResourcePath.{Leaf, Root}
 import quasar.api.{DataSourceType, ResourceName, ResourcePath, ResourcePathType}
 import quasar.connector.datasource.LightweightDataSource
+import quasar.contrib.pathy.APath
 import pathy.Path
+import Path.{DirName, FileName}
 import slamdata.Predef.{Stream => _, _}
 
 import cats.effect.{Effect, LiftIO, Async}
@@ -43,7 +45,7 @@ final class S3DataSource[F[_]: Effect, G[_]: Async] (
   s3JsonParsing: S3JsonParsing)
     extends LightweightDataSource[F, Stream[G, ?], Stream[G, Data]] {
 
-  def kind: DataSourceType = DataSourceType("remote", 1L)
+  def kind: DataSourceType = DataSourceType("s3", 1L)
 
   val shutdown: F[Unit] = client.shutdown
 
@@ -54,15 +56,14 @@ final class S3DataSource[F[_]: Effect, G[_]: Async] (
         case None => (ResourceError.pathNotFound(Leaf(file)): ReadError).left
         /* In http4s, the type of streaming results is the same as
          every other effectful operation. However,
-         LightweightDataSourceModule forces us to separate the types
+         LightweightDataSourceModule forces us to separate the types,
          so we need to translate */
         case Some(s) => s.translate[G](FToG).right[ReadError]
       }
     }
 
-
-  def children(path: ResourcePath): F[CommonError \/ Stream[G, (ResourceName, ResourcePathType)]] =
-    impl.children(client, bucket, path.toPath) map {
+  def children(path: ResourcePath): F[CommonError \/ Stream[G, (ResourceName, ResourcePathType)]] = {
+    impl.children(client, bucket, dropEmpty(path.toPath)) map {
       case None =>
         ResourceError.pathNotFound(path).left[Stream[G, (ResourceName, ResourcePathType)]]
       case Some(paths) =>
@@ -71,11 +72,23 @@ final class S3DataSource[F[_]: Effect, G[_]: Async] (
           case \/-(Path.FileName(fn)) => (ResourceName(fn), ResourcePathType.Resource)
         }).covary[G].right[CommonError]
     }
+  }
 
   def isResource(path: ResourcePath): F[Boolean] = path match {
-    case Root => false.point[F]
-    case Leaf(file) => impl.isResource(client, bucket, file)
+    case Root => false.pure[F]
+    case Leaf(file) => Path.refineType(dropEmpty(file)) match {
+      case -\/(_) => false.pure[F]
+      case \/-(f) => impl.isResource(client, bucket, f)
+    }
   }
+
+  private def dropEmpty(path: APath): APath =
+    Path.peel(path) match {
+      case Some((d, \/-(FileName(fn)))) if fn.isEmpty => d
+      case Some((d, -\/(DirName(dn)))) if dn.isEmpty => d
+      case Some(_) => path
+      case None => path
+    }
 
   private val FToG: FunctionK[F, G] = new FunctionK[F, G] {
     def apply[A](fa: F[A]): G[A] = LiftIO[G].liftIO(Effect[F].toIO(fa))

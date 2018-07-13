@@ -45,14 +45,18 @@ object isResource {
       .withMethod(Method.HEAD)
       .withHeaders(Headers(Range(0, 1)))
 
-    // Don't use the metadata, just check if the request
-    // returns a 404.
-    client.status(request) >>= {
-      case Status.Ok => true.pure[F]
-      case Status.PartialContent => true.pure[F]
-      case Status.NotFound => false.pure[F]
-      case Status.RangeNotSatisfiable => false.pure[F]
-      case s => Sync[F].raiseError(new Exception(s"Unexpected status returned during `exists` call: $s")) // TODO: fail somehow else
+    if (Path.identicalPath(Path.rootDir, file)) {
+      false.pure[F]
+    } else {
+      // Don't use the metadata, just check the request status
+      client.status(request) >>= {
+        case Status.Ok => true.pure[F]
+        case Status.PartialContent => true.pure[F]
+        case Status.NotFound => false.pure[F]
+        case Status.RangeNotSatisfiable => false.pure[F]
+        case Status.Forbidden => Sync[F].raiseError(new Exception(s"Permission denied. Make sure you have access to the configured bucket"))
+        case s => Sync[F].raiseError(new Exception(s"Unexpected status returned during `isResource` call: $s"))
+      }
     }
   }
 }

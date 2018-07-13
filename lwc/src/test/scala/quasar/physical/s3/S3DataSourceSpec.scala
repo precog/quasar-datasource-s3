@@ -21,7 +21,7 @@ import S3DataSourceSpec._
 import cats.effect.IO
 import fs2.Stream
 import quasar.api.ResourceDiscoverySpec
-import quasar.api.{ResourceName, ResourcePath}
+import quasar.api.{ResourceName, ResourcePath, ResourcePathType}
 import scalaz.{Foldable, Monoid, Id, ~>}, Id.Id
 import scalaz.syntax.applicative._
 import shims._
@@ -29,10 +29,35 @@ import org.http4s.client.blaze.Http1Client
 import org.http4s.Uri
 
 final class S3DataSourceSpec extends ResourceDiscoverySpec[IO, Stream[IO, ?]] {
+  "the root of a bucket with a trailing slash is not a resource" >>* {
+    val root = ResourcePath.root() / ResourceName("")
+    discovery.isResource(root).map(_ must beFalse)
+  }
+
+  "the root of a bucket is not a resource" >>* {
+    val root = ResourcePath.root()
+    discovery.isResource(root).map(_ must beFalse)
+  }
 
   "a prefix without contents is not a resource" >>* {
     val path = ResourcePath.root() / ResourceName("prefix3") / ResourceName("subprefix5")
     discovery.isResource(path).map(_ must beFalse)
+  }
+
+  "list nested children" >>* {
+    val path = ResourcePath.root() / ResourceName("dir1") / ResourceName("dir2") / ResourceName("dir3")
+
+    val listing = discovery.children(path)
+
+    listing.flatMap { list =>
+      list.map(_.compile.toList)
+        .getOrElse(IO.raiseError(new Exception("Could not list nested children under dir1/dir2/dir3")))
+        .map {
+          case List((resource, resourceType)) =>
+            resource must_= ResourceName("flattenable.data")
+            resourceType must_= ResourcePathType.resource
+        }
+    }
   }
 
   "read line-delimited and array JSON" >>* {
@@ -41,8 +66,10 @@ final class S3DataSourceSpec extends ResourceDiscoverySpec[IO, Stream[IO, ?]] {
 
     (ld |@| array).tupled.flatMap {
       case (readLD, readArray) => {
-        val rd = readLD.map(_.compile.toList).toOption.getOrElse(IO.raiseError(new Exception("Could not read lines.json")))
-        val ra = readArray.map(_.compile.toList).toOption.getOrElse(IO.raiseError(new Exception("Could not read lines.json")))
+        val rd = readLD.map(_.compile.toList)
+          .toOption.getOrElse(IO.raiseError(new Exception("Could not read lines.json")))
+        val ra = readArray.map(_.compile.toList)
+          .toOption.getOrElse(IO.raiseError(new Exception("Could not read array.json")))
 
         (rd |@| ra) {
           case (lines, array) => {

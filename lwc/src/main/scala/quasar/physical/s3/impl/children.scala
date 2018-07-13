@@ -34,7 +34,6 @@ import cats.syntax.option._
 import cats.syntax.flatMap._
 import cats.syntax.traverse._
 import cats.syntax.functor._
-import cats.syntax.foldable._
 import cats.syntax.eq._
 import cats.syntax.monadError._
 import cats.Functor
@@ -72,19 +71,30 @@ object children {
     // the S3 API doesn't understand empty `prefix`.
     val listingQuery = (bucket / "") withQueryParam ("list-type", 2)
     val queryUri =
-      objectPrefix.fold(listingQuery)(prefix => listingQuery withQueryParam ("prefix", prefix))
+      objectPrefix.fold(listingQuery)(prefix =>
+        listingQuery
+          .withQueryParam("prefix", prefix))
 
       for {
         // Send request to S3, parse the response as XML.
         topLevelElem <- client.expect[xml.Elem](queryUri)
         // Grab child object names from the response.
-        children <- for {
+        response <- for {
           contents <- Sync[F].suspend {
             // Grab <Contents>.
             Sync[F].catchNonFatal((topLevelElem \\ "Contents"))
               .adaptError {
                 case ex: Exception =>
                   new Exception("XML received from AWS API has no top-level <Contents>", ex)
+              }
+          }
+
+          keyCount <- Sync[F].suspend {
+            // Grab <Contents>.
+            Sync[F].catchNonFatal((topLevelElem \\ "KeyCount").text.toInt)
+              .adaptError {
+                case ex: Exception =>
+                  new Exception("XML received from AWS API has no top-level <KeyCount>", ex)
               }
           }
 
@@ -96,22 +106,25 @@ object children {
                   new Exception("XML received from AWS API has no <Key> elements under <Contents>", ex)
               }
           }
-        } yield names
+        } yield (names, keyCount)
+
+        (children, keyCount) = response
 
         // Convert S3 object names to paths.
         childPaths <- children.traverse(s3NameToPath)
-        .fold(Sync[F].raiseError[List[APath]](new Exception(s"Failed to parse object path in S3 API response")))(Sync[F].pure)
+          .fold(Sync[F].raiseError[List[APath]](new Exception(s"Failed to parse object path in S3 API response")))(Sync[F].pure)
+
         // Deal with some S3 idiosyncrasies.
         // TODO: Pagination
-        result =
-        if (dir =!= Path.rootDir && !childPaths.contains_(dir))
+
+        result = if (keyCount === 0) {
           None
-        else {
+        } else {
+          // AWS includes the folder itself in the returned
+          // results, so we have to remove it.
+          // TODO: Report an error if there are duplicates. Remove duplicates.
           Some(childPaths.filter(path => path =!= dir))
         }
-        // AWS includes the folder itself in the returned
-        // results, so we have to remove it.
-        // TODO: Report an error if there are duplicates. Remove duplicates.
       } yield result
   }
 
@@ -120,10 +133,12 @@ object children {
     // entire bucket. Otherwise, we have to drop
     // the first `/`, because object prefixes can't
     // begin with `/`.
-    if (apath != Path.rootDir)
+    if (apath != Path.rootDir) {
       Path.posixCodec.printPath(apath).drop(1).self.some // .replace("/", "%2F")
-    else
+    }
+    else {
       none[String]
+    }
   }
 
   private def s3NameToPath(name: String): Option[APath] = {
@@ -145,6 +160,8 @@ object children {
 
   private def pathToDir(path: APath): Option[ADir] =
     Path.peel(path) match {
+      case Some((d, \/-(FileName(fn)))) if fn.isEmpty => d.some
+      case Some((d, -\/(DirName(dn)))) if dn.isEmpty => d.some
       case Some((d, \/-(FileName(fn)))) => (d </> Path.dir(fn)).some
       case Some((d, -\/(DirName(dn)))) => (d </> Path.dir(dn)).some
       case None if Path.depth(path) === 0 => Path.rootDir.some
