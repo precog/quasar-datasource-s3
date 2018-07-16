@@ -45,7 +45,7 @@ object S3DataSourceModule extends LightweightDataSourceModule {
       case Right(s3Config) => {
         Http1Client[F]() map { client =>
           val ds: DataSource[F, Stream[G, ?], ResourcePath, Stream[G, Data]] =
-            new S3DataSource[F, G](client, s3Config.bucket, s3Config.parsing)
+            new S3DataSource[F, G](client, s3Config)
 
           ds.right[InitializationError[Json]]
         }

@@ -24,7 +24,8 @@ import cats.syntax.flatMap._
 import cats.instances.option._
 import slamdata.Predef._
 
-final case class S3Config(bucket: Uri, parsing: S3JsonParsing)
+final case class S3Config(bucket: Uri, parsing: S3JsonParsing, credentials: Option[S3Credentials])
+final case class S3Credentials(accessKey: String, secretKey: String, region: String)
 
 object S3Config {
   private val parseStrings =
@@ -38,9 +39,17 @@ object S3Config {
     DecodeJson { c =>
       val b = c.get[String]("bucket").toOption >>= (Uri.fromString(_).toOption)
       val jp = c.get[String]("jsonParsing").toOption >>= (parseStrings.get(_))
+      val akey = c.downField("credentials").get[String]("accessKey").toOption
+      val skey = c.downField("credentials").get[String]("secretKey").toOption
+      val rkey = c.downField("credentials").get[String]("region").toOption
 
       (b, jp).mapN {
-        case (u, p) => S3Config(u, p)
+        case (u, p) => {
+          (akey, skey, rkey).mapN(S3Credentials(_, _, _)) match {
+            case Some(creds) => S3Config(u, p, Some(creds))
+            case None => S3Config(u, p, None)
+          }
+        }
       } match {
         case Some(config) => DecodeResult.ok(config)
         case None => DecodeResult.fail(failureMessage, c.history)
