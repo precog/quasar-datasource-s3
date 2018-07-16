@@ -25,7 +25,7 @@ import quasar.connector.datasource.LightweightDataSource
 import quasar.contrib.cats.effect._
 import quasar.contrib.pathy.APath
 
-import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.ExecutionContext
 import slamdata.Predef.{Stream => _, _}
 
 import cats.arrow.FunctionK
@@ -43,7 +43,7 @@ import shims._
 final class S3DataSource[F[_]: Effect, G[_]: Async] (
   client: Client[F],
   bucket: Uri,
-  s3JsonParsing: S3JsonParsing)
+  s3JsonParsing: S3JsonParsing)(ec: ExecutionContext)
     extends LightweightDataSource[F, Stream[G, ?], Stream[G, Data]] {
 
   def kind: DataSourceType = s3.datasourceKind
@@ -92,6 +92,8 @@ final class S3DataSource[F[_]: Effect, G[_]: Async] (
     }
 
   private val FToG: FunctionK[F, G] = new FunctionK[F, G] {
+    implicit def ec0: ExecutionContext = ec
+
     def apply[A](fa: F[A]): G[A] = fa.to[G]
   }
 }

@@ -22,6 +22,8 @@ import quasar.api.{DataSourceType, ResourcePath}
 import quasar.connector.{DataSource, LightweightDataSourceModule}
 import quasar.api.DataSourceError.{InitializationError, MalformedConfiguration}
 
+import scala.concurrent.ExecutionContext.Implicits.global
+
 import argonaut.Json
 import cats.effect.{Timer, ConcurrentEffect}
 import fs2.Stream
@@ -44,7 +46,7 @@ object S3DataSourceModule extends LightweightDataSourceModule {
       case Right(s3Config) => {
         Http1Client[F]() map { client =>
           val ds: DataSource[F, Stream[G, ?], ResourcePath, Stream[G, Data]] =
-            new S3DataSource[F, G](client, s3Config.bucket, s3Config.parsing)
+            new S3DataSource[F, G](client, s3Config.bucket, s3Config.parsing)(global)
 
           ds.right[InitializationError[Json]]
         }
