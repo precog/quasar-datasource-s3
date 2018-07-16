@@ -27,6 +27,19 @@ import slamdata.Predef._
 final case class S3Config(bucket: Uri, parsing: S3JsonParsing)
 
 object S3Config {
+  /*  Example configuration string for line-delimited JSON:
+   *  {
+   *    "bucket": "<uri to bucket>",
+   *    "jsonParsing": "lineDelimited"
+   *  }
+   *
+   *  Example configuration string for array JSON:
+   *  {
+   *    "bucket": "<uri to bucket>",
+   *    "jsonParsing": "array"
+   *  }
+   *
+   */
   private val parseStrings =
     Map[String, S3JsonParsing](
       "array" -> S3JsonParsing.JsonArray,
