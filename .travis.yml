@@ -5,7 +5,7 @@ dist: trusty
 sudo: false
 
 script:
-  - sbt test lwc/assembly assembleLWC
+  - sbt test datasource/assembly assembleDatasource
 
 branches:
   except:
@@ -38,7 +38,7 @@ deploy:
   file_glob: false
   file:
     - .targets/lwc/scala-2.12/quasar-s3-$VERSION-explode.tar.gz
-    - .targets/lwc/scala-2.12/quasar-s3-lwc-assembly-$VERSION.jar
+    - .targets/lwc/scala-2.12/quasar-s3-assembly-$VERSION.jar
   skip_cleanup: true
   script:
     - ./scripts/version
