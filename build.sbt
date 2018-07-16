@@ -151,9 +151,9 @@ lazy val githubReleaseSettings =
       pushChanges)
   )
 
-lazy val isCIBuild               = settingKey[Boolean]("True when building in any automated environment (e.g. Travis)")
-lazy val isIsolatedEnv           = settingKey[Boolean]("True if running in an isolated environment")
-lazy val exclusiveTestTag        = settingKey[String]("Tag for exclusive execution tests")
+lazy val isCIBuild = settingKey[Boolean]("True when building in any automated environment (e.g. Travis)")
+lazy val isIsolatedEnv = settingKey[Boolean]("True if running in an isolated environment")
+lazy val exclusiveTestTag = settingKey[String]("Tag for exclusive execution tests")
 
 lazy val sideEffectTestFSConfig = taskKey[Unit]("Rewrite the JVM environment to contain the filesystem classpath information for integration tests")
 
@@ -166,63 +166,32 @@ lazy val root = project.in(file("."))
   .settings(transferPublishAndTagResources)
   .settings(aggregate in assembly := false)
   .settings(excludeTypelevelScalaLibrary)
-  .aggregate(lwc, repl, it)
+  .aggregate(datasource)
   .enablePlugins(AutomateHeaderPlugin)
 
 // common components
 
+// Quasar needs to know where the DataSourceModule for the connector is
+lazy val manifestSettings =
+  packageOptions in (Compile, packageBin) +=
+    Package.ManifestAttributes("DataSource-Module" -> "quasar.physical.s3.S3DataSourceModule$")
+
 /** Lightweight connector module.
   */
-lazy val lwc = project
+lazy val datasource = project
   .settings(name := "quasar-s3")
   .settings(commonSettings)
   .settings(targetSettings)
   .settings(resolvers += Resolver.bintrayRepo("slamdata-inc", "maven-public"))
   .settings(
-    libraryDependencies ++= Dependencies.lwc,
+    libraryDependencies ++= Dependencies.datasource,
     wartremoverWarnings in (Compile, compile) --= Seq(
       Wart.AsInstanceOf,
       Wart.Equals,
       Wart.Overloading))
   .settings(githubReleaseSettings)
   .settings(excludeTypelevelScalaLibrary)
-  .settings(AssembleLWC.setAssemblyKey)
+  .settings(AssembleDatasource.setAssemblyKey)
+  .settings(manifestSettings)
   .enablePlugins(AutomateHeaderPlugin)
 
-/** A project with a properly configured `console`
-  */
-lazy val repl = project
-  .settings(name := "quasar-repl")
-  .dependsOn(lwc)
-  .settings(commonSettings)
-  .settings(noPublishSettings)
-  .settings(targetSettings)
-  .settings(excludeTypelevelScalaLibrary)
-  .settings(
-    console := (console in Test).value,
-    scalacOptions --= Seq("-Yno-imports", "-Ywarn-unused:imports", "-Xfatal-warnings"),
-    initialCommands in console += """
-    |import quasar.physical.s3._
-    |import quasar.fs.mount._
-    |import pathy.Path
-    |import scalaz._, Scalaz._, scalaz.concurrent.Task
-    """.stripMargin.trim
-  )
-  .enablePlugins(AutomateHeaderPlugin)
-
-/** S3-specific integration tests
-  */
-lazy val it = project
-  .settings(name := "quasar-s3-it")
-  .configs(ExclusiveTests)
-  .dependsOn(lwc)
-  .settings(commonSettings)
-  .settings(publishTestsSettings)
-  .settings(targetSettings)
-  .settings(libraryDependencies ++= Dependencies.it)
-  // Configure various test tasks to run exclusively in the `ExclusiveTests` config.
-  .settings(inConfig(ExclusiveTests)(Defaults.testTasks): _*)
-  .settings(inConfig(ExclusiveTests)(exclusiveTasks(test, testOnly, testQuick)): _*)
-  .settings(parallelExecution in Test := false)
-  .settings(excludeTypelevelScalaLibrary)
-  .enablePlugins(AutomateHeaderPlugin)

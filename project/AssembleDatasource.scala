@@ -17,8 +17,8 @@ import Tags.Parallel
 import scalaz.concurrent.Task
 import Task._
 
-object AssembleLWC {
-  val assembleLWC = TaskKey[Unit]("assembleLWC")
+object AssembleDatasource {
+  val assembleDatasource = TaskKey[Unit]("assembleDatasource")
 
   // SBT needs `ModuleId` to declare dependencies with
   // `libraryDependencies`, and coursier wants `Dependency`.
@@ -28,14 +28,14 @@ object AssembleLWC {
     Dependency(Module(moduleId.organization, moduleId.name + "_2.12"), moduleId.revision)
 
   val setAssemblyKey =
-    assembleLWC in Compile := {
-      // the location of the LWC jar itself. we make sure
+    assembleDatasource  in Compile := {
+      // the location of the datasource jar itself. we make sure
       // it's been built by calling `package` here.
       val packagedJarFile = (sbt.Keys.`package` in Compile).value
 
       // where all of the artifacts for the project are.
-      // notably the LWC jar, and later on the assembled
-      // LWC tarball.
+      // notably the datasource jar, and later on the assembled
+      // datasource tarball.
       val buildOutputFolder = (crossTarget in Compile).value
 
       // Grab the version to make it part of the tarball filename.
@@ -44,35 +44,35 @@ object AssembleLWC {
       // we assemble every component of the final tarball
       // in this folder, to be exploded over the user's
       // `plugins` folder.
-      val lwcPluginsFolder = new File(buildOutputFolder, "plugins")
+      val datasourcePluginsFolder = new File(buildOutputFolder, "plugins")
 
-      // a folder for just the LWC jar itself, shared by
-      // other LWC's in the same `plugins` folder.
-      val lwcJarFolder = new File(lwcPluginsFolder, "lwc")
+      // a folder for just the datasource jar itself, shared by
+      // other datasources in the same `plugins` folder.
+      val datasourceJarFolder = new File(datasourcePluginsFolder, "datasource")
 
       // the jar file's own path.
-      val lwcJarFile = new File(lwcJarFolder, packagedJarFile.name)
+      val datasourceJarFile = new File(datasourceJarFolder, packagedJarFile.name)
 
-      // the LWC jar's path relative to lwcPluginsFolder;
+      // the datasource jar's path relative to datasourcePluginsFolder;
       // included in the generated .plugin file to let quasar
       // know where to load it from.
-      val relativeLWCJarPath =
-        lwcPluginsFolder.toPath.relativize(lwcJarFile.toPath).toString
+      val relativeDatasourceJarPath =
+        datasourcePluginsFolder.toPath.relativize(datasourceJarFile.toPath).toString
 
       // the path to the generated .plugin file.
-      val pluginFilePath = new File(lwcPluginsFolder, "s3.plugin").toPath
+      val pluginFilePath = new File(datasourcePluginsFolder, "s3.plugin").toPath
 
-      // start coursier on resolving all of the LWC's
+      // start coursier on resolving all of the datasource's
       // dependencies, *except* for quasar. quasar and its
       // dependencies are already present in the user's
       // `plugins` folder.
       val resolution =
-        Resolution(Dependencies.lwcCore.map(moduleIdToDependency).toSet)
+        Resolution(Dependencies.datasourceCore.map(moduleIdToDependency).toSet)
 
-      // we're using lwcPluginsFolder as a coursier cache while fetching
+      // we're using datasourcePluginsFolder as a coursier cache while fetching
       // our dependencies, because that's the format of a `plugins` folder.
       val cache = Cache.fetch(
-        lwcPluginsFolder,
+        datasourcePluginsFolder,
         CachePolicy.Update)
 
       // I don't want to add kind-projector to  the compiler
@@ -83,23 +83,23 @@ object AssembleLWC {
 
       (for {
         // make the output plugins folder and the folder inside
-        // which houses the lwc jar.
+        // which houses the datasource jar.
         _ <- Task.delay {
-          lwcPluginsFolder.mkdir()
-          lwcJarFolder.mkdir()
+          datasourcePluginsFolder.mkdir()
+          datasourceJarFolder.mkdir()
         }
 
         _ <- Task.delay(println("Fetching artifacts with coursier..."))
 
         // coursier prefers that we fetch metadata before fetching
-        // artifacts. we do that in parallel with copying the lwc
+        // artifacts. we do that in parallel with copying the datasource
         // jar to its new place, because they don't depend on one
         // another.
         fetchedJarFiles <-
           Parallel.unwrap(
             Applicative[ParallelTask].apply2(
               Parallel(
-                Task(Files.copy(packagedJarFile.toPath(), lwcJarFile.toPath(), REPLACE_EXISTING))
+                Task(Files.copy(packagedJarFile.toPath(), datasourceJarFile.toPath(), REPLACE_EXISTING))
               ),
               Parallel(
                 for {
@@ -112,7 +112,7 @@ object AssembleLWC {
                   // fetch artifacts in parallel into cache
                   artifactsPar = metadata.artifacts.toList
                     .traverse[ParallelTask, FileError \/ File] { f =>
-                      Parallel(Cache.file(f, lwcPluginsFolder, CachePolicy.Update).run)
+                      Parallel(Cache.file(f, datasourcePluginsFolder, CachePolicy.Update).run)
                     }
 
                   // some contortions to make sure *all* errors
@@ -135,13 +135,13 @@ object AssembleLWC {
 
         // the .plugin file requires all dependency jar paths
         // to be relative to the plugins folder
-        classPath = fetchedJarFiles.map(p => lwcPluginsFolder.toPath.relativize(p.toPath))
+        classPath = fetchedJarFiles.map(p => datasourcePluginsFolder.toPath.relativize(p.toPath)) ++ Seq(relativeDatasourceJarPath)
 
         // format the classPath as readable json for the .plugin file
         cpJson = classPath.map(s => "\"" + s + "\"").mkString("[\n    ", ",\n    ", "\n  ]")
 
-        // include the LWC jar and classpath into the .plugin file
-        outJson = s"""{\n  "main_jar": "$relativeLWCJarPath",\n  "classpath": $cpJson\n}"""
+        // include the datasource jar and classpath into the .plugin file
+        outJson = s"""{\n  "mainJar": "$relativeDatasourceJarPath",\n  "classPath": $cpJson\n}"""
 
         // delete an old .plugin file, write the new one
         _ <- Task.delay {
@@ -151,10 +151,10 @@ object AssembleLWC {
 
         _ <- Task.delay(println(".plugin file written. Zipping up tarball..."))
 
-        // equivalent to `ls $lwcPluginsFolder`, the files and
+        // equivalent to `ls $datasourcePluginsFolder`, the files and
         // folders we need to zip up to make a valid
         // `plugins` folder
-        files = lwcPluginsFolder.listFiles.map(p => lwcPluginsFolder.toPath.relativize(p.toPath)).mkString(" ")
+        files = datasourcePluginsFolder.listFiles.map(p => datasourcePluginsFolder.toPath.relativize(p.toPath)).mkString(" ")
 
         // the `plugins` tarball's location
         tarPath = new File(buildOutputFolder, s"quasar-s3-$thisVersion-explode.tar.gz")
@@ -163,7 +163,7 @@ object AssembleLWC {
         // the files in our plugins folder ($files), with the
         // plugins folder as "root" of the tarball (-C) and
         // put the tarball into the artifacts folder.
-        cmd = s"tar -czvf $tarPath -C $lwcPluginsFolder/ $files"
+        cmd = s"tar -czvf $tarPath -C $datasourcePluginsFolder/ $files"
 
         // do it.
         _ <- Task.delay(Runtime.getRuntime().exec(cmd))
