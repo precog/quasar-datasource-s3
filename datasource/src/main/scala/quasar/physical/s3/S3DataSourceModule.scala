@@ -24,7 +24,6 @@ import quasar.api.DataSourceError.{InitializationError, MalformedConfiguration}
 
 import argonaut.Json
 import cats.effect.{Timer, ConcurrentEffect}
-import eu.timepit.refined.auto._
 import fs2.Stream
 import scalaz.\/
 import scalaz.syntax.either._
@@ -34,7 +33,7 @@ import org.http4s.client.blaze.Http1Client
 import shims._
 
 object S3DataSourceModule extends LightweightDataSourceModule {
-  val kind: DataSourceType = DataSourceType("s3", 1L)
+  def kind: DataSourceType = s3.datasourceKind
 
   def lightweightDataSource[
       F[_]: ConcurrentEffect: Timer,

@@ -16,30 +16,29 @@
 
 package quasar.physical.s3
 
-import eu.timepit.refined.auto._
-import fs2.Stream
-import org.http4s.Uri
-import org.http4s.client.Client
 import quasar.Data
-import quasar.api.ResourceError.{CommonError, ReadError}
 import quasar.api.ResourceError
+import quasar.api.ResourceError.{CommonError, ReadError}
 import quasar.api.ResourcePath.{Leaf, Root}
 import quasar.api.{DataSourceType, ResourceName, ResourcePath, ResourcePathType}
 import quasar.connector.datasource.LightweightDataSource
-import quasar.contrib.pathy.APath
 import quasar.contrib.cats.effect._
-import pathy.Path
-import Path.{DirName, FileName}
+import quasar.contrib.pathy.APath
+
+import scala.concurrent.ExecutionContext.Implicits.global
 import slamdata.Predef.{Stream => _, _}
 
-import cats.effect.{Effect, Async}
 import cats.arrow.FunctionK
-import scalaz.{\/, \/-, -\/}
+import cats.effect.{Effect, Async}
+import fs2.Stream
+import org.http4s.Uri
+import org.http4s.client.Client
+import pathy.Path
+import pathy.Path.{DirName, FileName}
 import scalaz.syntax.applicative._
 import scalaz.syntax.either._
-
+import scalaz.{\/, \/-, -\/}
 import shims._
-import scala.concurrent.ExecutionContext.Implicits.global
 
 final class S3DataSource[F[_]: Effect, G[_]: Async] (
   client: Client[F],
@@ -47,7 +46,7 @@ final class S3DataSource[F[_]: Effect, G[_]: Async] (
   s3JsonParsing: S3JsonParsing)
     extends LightweightDataSource[F, Stream[G, ?], Stream[G, Data]] {
 
-  def kind: DataSourceType = DataSourceType("s3", 1L)
+  def kind: DataSourceType = s3.datasourceKind
 
   val shutdown: F[Unit] = client.shutdown
 

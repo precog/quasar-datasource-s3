@@ -16,27 +16,27 @@
 
 package quasar.physical.s3.impl
 
+import quasar.contrib.pathy._
+
 import slamdata.Predef._
 
-import org.http4s.client.Client
-import org.http4s.Uri
-import org.http4s.scalaxml.{xml => xmlDecoder}
-import pathy.Path
-import Path.{DirName, FileName}
-import quasar.contrib.pathy._
-import scala.xml
-
+import cats.Functor
 import cats.effect.Sync
+import cats.instances.int._
 import cats.instances.list._
 import cats.instances.option._
-import cats.instances.int._
-import cats.syntax.option._
-import cats.syntax.flatMap._
-import cats.syntax.traverse._
-import cats.syntax.functor._
 import cats.syntax.eq._
+import cats.syntax.flatMap._
+import cats.syntax.functor._
 import cats.syntax.monadError._
-import cats.Functor
+import cats.syntax.option._
+import cats.syntax.traverse._
+import org.http4s.Uri
+import org.http4s.client.Client
+import org.http4s.scalaxml.{xml => xmlDecoder}
+import pathy.Path
+import pathy.Path.{DirName, FileName}
+import scala.xml
 import scalaz.{\/-, -\/}
 import shims._
 

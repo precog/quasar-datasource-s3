@@ -17,10 +17,11 @@
 package quasar.physical.s3
 package impl
 
-import slamdata.Predef._
 import quasar.Data
 import quasar.contrib.pathy._
 import quasar.physical.s3.S3JsonParsing
+
+import slamdata.Predef._
 
 import cats.effect.Sync
 import cats.syntax.applicative._
