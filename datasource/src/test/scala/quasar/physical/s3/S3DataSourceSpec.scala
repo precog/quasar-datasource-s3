@@ -64,6 +64,25 @@ final class S3DataSourceSpec extends ResourceDiscoverySpec[IO, Stream[IO, ?]] {
     }
   }
 
+  "list children at the root of the bucket" >>* {
+    discovery.children(ResourcePath.root()).flatMap { list =>
+      list.map(_.compile.toList).getOrElse(IO.raiseError(new Exception("Could not list children under the root")))
+        .map(resources => {
+          resources.length must_== 4
+          resources(0) must_== (ResourceName("dir1") -> ResourcePathType.resourcePrefix)
+          resources(1) must_== (ResourceName("extraSmallZips.data")-> ResourcePathType.resource)
+          resources(2) must_== (ResourceName("prefix3") -> ResourcePathType.resourcePrefix)
+          resources(3) must_== (ResourceName("testData") -> ResourcePathType.resourcePrefix)
+        })
+    }
+  }
+
+  "an actual file is a resource" >>* {
+    val res = ResourcePath.root() / ResourceName("testData") / ResourceName("array.json")
+
+    discovery.isResource(res) map (_ must beTrue)
+  }
+
   "read line-delimited and array JSON" >>* {
     val ld = discoveryLD.evaluate(ResourcePath.root() / ResourceName("testData") / ResourceName("lines.json"))
     val array = discovery.evaluate(ResourcePath.root() / ResourceName("testData") / ResourceName("array.json"))
