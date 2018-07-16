@@ -1,7 +1,7 @@
 libraryDependencies += "org.kohsuke" % "github-api" % "1.59" exclude("org.jenkins-ci", "annotation-indexer")
 
 // used to fetch dependencies to form a coursier cache,
-// for packaging the LWC.
+// for packaging the datasource.
 // should remain the newest coursier version.
 libraryDependencies ++= Seq(
   "io.get-coursier" %% "coursier" % "1.0.1",

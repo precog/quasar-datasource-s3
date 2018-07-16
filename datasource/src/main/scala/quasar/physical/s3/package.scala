@@ -16,9 +16,17 @@
 
 package quasar.physical.s3
 
+import quasar.api.DataSourceType
+
+import eu.timepit.refined.auto._
+
 sealed trait S3JsonParsing
 
 object S3JsonParsing {
   case object JsonArray extends S3JsonParsing
   case object LineDelimited extends S3JsonParsing
+}
+
+package object s3 {
+  val datasourceKind: DataSourceType = DataSourceType("s3", 1L)
 }

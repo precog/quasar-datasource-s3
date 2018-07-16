@@ -151,9 +151,9 @@ lazy val githubReleaseSettings =
       pushChanges)
   )
 
-lazy val isCIBuild               = settingKey[Boolean]("True when building in any automated environment (e.g. Travis)")
-lazy val isIsolatedEnv           = settingKey[Boolean]("True if running in an isolated environment")
-lazy val exclusiveTestTag        = settingKey[String]("Tag for exclusive execution tests")
+lazy val isCIBuild = settingKey[Boolean]("True when building in any automated environment (e.g. Travis)")
+lazy val isIsolatedEnv = settingKey[Boolean]("True if running in an isolated environment")
+lazy val exclusiveTestTag = settingKey[String]("Tag for exclusive execution tests")
 
 lazy val sideEffectTestFSConfig = taskKey[Unit]("Rewrite the JVM environment to contain the filesystem classpath information for integration tests")
 
@@ -166,7 +166,7 @@ lazy val root = project.in(file("."))
   .settings(transferPublishAndTagResources)
   .settings(aggregate in assembly := false)
   .settings(excludeTypelevelScalaLibrary)
-  .aggregate(lwc)
+  .aggregate(datasource)
   .enablePlugins(AutomateHeaderPlugin)
 
 // common components
@@ -178,20 +178,20 @@ lazy val manifestSettings =
 
 /** Lightweight connector module.
   */
-lazy val lwc = project
+lazy val datasource = project
   .settings(name := "quasar-s3")
   .settings(commonSettings)
   .settings(targetSettings)
   .settings(resolvers += Resolver.bintrayRepo("slamdata-inc", "maven-public"))
   .settings(
-    libraryDependencies ++= Dependencies.lwc,
+    libraryDependencies ++= Dependencies.datasource,
     wartremoverWarnings in (Compile, compile) --= Seq(
       Wart.AsInstanceOf,
       Wart.Equals,
       Wart.Overloading))
   .settings(githubReleaseSettings)
   .settings(excludeTypelevelScalaLibrary)
-  .settings(AssembleLWC.setAssemblyKey)
+  .settings(AssembleDatasource.setAssemblyKey)
   .settings(manifestSettings)
   .enablePlugins(AutomateHeaderPlugin)
 

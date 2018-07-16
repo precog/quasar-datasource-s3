@@ -16,40 +16,40 @@
 
 package quasar.physical.s3
 
-import eu.timepit.refined.auto._
-import fs2.Stream
-import org.http4s.Request
-import org.http4s.client.Client
 import quasar.Data
-import quasar.api.ResourceError.{CommonError, ReadError}
 import quasar.api.ResourceError
+import quasar.api.ResourceError.{CommonError, ReadError}
 import quasar.api.ResourcePath.{Leaf, Root}
 import quasar.api.{DataSourceType, ResourceName, ResourcePath, ResourcePathType}
 import quasar.connector.datasource.LightweightDataSource
-import quasar.contrib.pathy.APath
 import quasar.contrib.cats.effect._
-import pathy.Path
-import Path.{DirName, FileName}
+import quasar.contrib.pathy.APath
+
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration.SECONDS
 import slamdata.Predef.{Stream => _, _}
 
-import cats.effect.{Effect, Async, Timer}
-import cats.arrow.FunctionK
-import cats.syntax.flatMap._
-import scalaz.{\/, \/-, -\/}
-import scalaz.syntax.applicative._
-import scalaz.syntax.either._
-
-import shims._
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration.SECONDS
 import java.time.{ZoneOffset, LocalDateTime}
 
-final class S3DataSource[F[_]: Effect: Timer, G[_]: Async] (
+import cats.arrow.FunctionK
+import cats.effect.{Effect, Async, Timer}
+import fs2.Stream
+import org.http4s.client.Client
+import org.http4s.Request
+import org.http4s.Uri
+import pathy.Path
+import pathy.Path.{DirName, FileName}
+import scalaz.syntax.applicative._
+import scalaz.syntax.either._
+import scalaz.{\/, \/-, -\/}
+import shims._
+
+final class S3DataSource[F[_]: Effect: Timer, G[_]: Async](
   client: Client[F],
-  config: S3Config)
+  config: S3Config)(ec: ExecutionContext)
     extends LightweightDataSource[F, Stream[G, ?], Stream[G, Data]] {
 
-  def kind: DataSourceType = DataSourceType("s3", 1L)
+  def kind: DataSourceType = s3.datasourceKind
 
   val shutdown: F[Unit] = client.shutdown
 
@@ -97,6 +97,8 @@ final class S3DataSource[F[_]: Effect: Timer, G[_]: Async] (
     }
 
   private val FToG: FunctionK[F, G] = new FunctionK[F, G] {
+    implicit def ec0: ExecutionContext = ec
+
     def apply[A](fa: F[A]): G[A] = fa.to[G]
   }
 }

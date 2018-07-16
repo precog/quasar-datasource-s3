@@ -16,13 +16,14 @@
 
 package quasar.physical.s3.impl
 
+import quasar.contrib.pathy._
+
 import slamdata.Predef._
 
 import org.http4s.client.Client
 import org.http4s.{Method, Request, Status, Uri, Headers}
 import org.http4s.headers.Range
 import pathy.Path
-import quasar.contrib.pathy._
 import cats.effect.{Effect, Timer}
 import cats.syntax.flatMap._
 import cats.syntax.applicative._

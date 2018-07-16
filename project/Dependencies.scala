@@ -28,7 +28,7 @@ object Dependencies {
   // http4s-blaze-client's version has to be in sync with
   // quasar's http4s version. The same goes for any
   // dependencies, transitive or otherwise.
-  def lwcCore = Seq(
+  def datasourceCore = Seq(
     "org.http4s"             %% "http4s-scala-xml"    % http4sVersion,
     "org.http4s"             %% "http4s-blaze-client" % http4sVersion,
     "org.scala-lang.modules" %% "scala-xml"           % scalaXmlVersion,
@@ -42,10 +42,10 @@ object Dependencies {
     "io.circe"               %% "circe-fs2"           % circeFs2Version
   )
 
-  // we need to separate quasar out from the LWC dependencies,
-  // to keep from packaging it and its dependencies.
-  // TODO: we should do this in the assembly routine.
-  def lwc = lwcCore ++ Seq(
+  // we need to separate quasar out from the datasource dependencies,
+  // to keep from packaging it and its dependencies. TODO: we should
+  // do this in the assembly routine.
+  def datasource = datasourceCore ++ Seq(
     "com.slamdata" %% "quasar-api-internal"        % quasarVersion,
     "com.slamdata" %% "quasar-api-internal"        % quasarVersion % Test classifier "tests",
     "com.slamdata" %% "quasar-foundation-internal" % quasarVersion,

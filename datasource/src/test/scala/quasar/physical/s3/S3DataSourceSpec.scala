@@ -16,18 +16,21 @@
 
 package quasar.physical.s3
 
-import slamdata.Predef._
-import S3DataSourceSpec._
-import cats.effect.IO
-import fs2.Stream
 import quasar.api.ResourceDiscoverySpec
 import quasar.api.{ResourceName, ResourcePath, ResourcePathType}
-import scalaz.{Foldable, Monoid, Id, ~>}, Id.Id
-import scalaz.syntax.applicative._
-import shims._
-import org.http4s.client.blaze.Http1Client
-import org.http4s.Uri
+
 import scala.concurrent.ExecutionContext.Implicits.global
+import slamdata.Predef._
+
+import cats.effect.IO
+import fs2.Stream
+import org.http4s.Uri
+import org.http4s.client.blaze.Http1Client
+import scalaz.syntax.applicative._
+import scalaz.{Foldable, Monoid, Id, ~>}, Id.Id
+import shims._
+
+import S3DataSourceSpec._
 
 final class S3DataSourceSpec extends ResourceDiscoverySpec[IO, Stream[IO, ?]] {
   "the root of a bucket with a trailing slash is not a resource" >>* {
@@ -61,6 +64,25 @@ final class S3DataSourceSpec extends ResourceDiscoverySpec[IO, Stream[IO, ?]] {
     }
   }
 
+  "list children at the root of the bucket" >>* {
+    discovery.children(ResourcePath.root()).flatMap { list =>
+      list.map(_.compile.toList).getOrElse(IO.raiseError(new Exception("Could not list children under the root")))
+        .map(resources => {
+          resources.length must_== 4
+          resources(0) must_== (ResourceName("dir1") -> ResourcePathType.resourcePrefix)
+          resources(1) must_== (ResourceName("extraSmallZips.data")-> ResourcePathType.resource)
+          resources(2) must_== (ResourceName("prefix3") -> ResourcePathType.resourcePrefix)
+          resources(3) must_== (ResourceName("testData") -> ResourcePathType.resourcePrefix)
+        })
+    }
+  }
+
+  "an actual file is a resource" >>* {
+    val res = ResourcePath.root() / ResourceName("testData") / ResourceName("array.json")
+
+    discovery.isResource(res) map (_ must beTrue)
+  }
+
   "read line-delimited and array JSON" >>* {
     val ld = discoveryLD.evaluate(ResourcePath.root() / ResourceName("testData") / ResourceName("lines.json"))
     val array = discovery.evaluate(ResourcePath.root() / ResourceName("testData") / ResourceName("array.json"))
@@ -87,14 +109,14 @@ final class S3DataSourceSpec extends ResourceDiscoverySpec[IO, Stream[IO, ?]] {
     S3Config(
       Uri.unsafeFromString("http://qconnector-tests.s3.amazonaws.com"),
       S3JsonParsing.LineDelimited,
-      None))
+      None))(global)
 
   val discovery = new S3DataSource[IO, IO](
     Http1Client[IO]().unsafeRunSync,
     S3Config(
       Uri.unsafeFromString("http://qconnector-tests.s3.amazonaws.com"),
       S3JsonParsing.JsonArray,
-      None))
+      None))(global)
 
   val nonExistentPath =
     ResourcePath.root() / ResourceName("does") / ResourceName("not") / ResourceName("exist")
