@@ -16,17 +16,21 @@
 
 package quasar.physical.s3
 
-import slamdata.Predef._
-import S3DataSourceSpec._
-import cats.effect.IO
-import fs2.Stream
 import quasar.api.ResourceDiscoverySpec
 import quasar.api.{ResourceName, ResourcePath, ResourcePathType}
-import scalaz.{Foldable, Monoid, Id, ~>}, Id.Id
-import scalaz.syntax.applicative._
-import shims._
-import org.http4s.client.blaze.Http1Client
+
+import scala.concurrent.ExecutionContext.Implicits.global
+import slamdata.Predef._
+
+import cats.effect.IO
+import fs2.Stream
 import org.http4s.Uri
+import org.http4s.client.blaze.Http1Client
+import scalaz.syntax.applicative._
+import scalaz.{Foldable, Monoid, Id, ~>}, Id.Id
+import shims._
+
+import S3DataSourceSpec._
 
 final class S3DataSourceSpec extends ResourceDiscoverySpec[IO, Stream[IO, ?]] {
   "the root of a bucket with a trailing slash is not a resource" >>* {
@@ -84,12 +88,12 @@ final class S3DataSourceSpec extends ResourceDiscoverySpec[IO, Stream[IO, ?]] {
   val discoveryLD = new S3DataSource[IO, IO](
     Http1Client[IO]().unsafeRunSync,
     Uri.unsafeFromString("http://qconnector-tests.s3.amazonaws.com"),
-    S3JsonParsing.LineDelimited)
+    S3JsonParsing.LineDelimited)(global)
 
   val discovery = new S3DataSource[IO, IO](
     Http1Client[IO]().unsafeRunSync,
     Uri.unsafeFromString("http://qconnector-tests.s3.amazonaws.com"),
-    S3JsonParsing.JsonArray)
+    S3JsonParsing.JsonArray)(global)
 
   val nonExistentPath =
     ResourcePath.root() / ResourceName("does") / ResourceName("not") / ResourceName("exist")
