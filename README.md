@@ -22,10 +22,10 @@ request to `/datasource/<your datasource name>` including a JSON
 document specifiying the datasource's configuration. An example of a
 JSON document to create a datasource:
 
-```
+```json
 {
-	"bucket": "https://qsecure.s3.amazonaws.com",
-	"jsonParsing": "lineDelimited"
+  "bucket": "https://qsecure.s3.amazonaws.com",
+  "jsonParsing": "lineDelimited"
 }
 ```
 
