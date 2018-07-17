@@ -26,7 +26,6 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import cats.effect.Sync
 import cats.implicits._
-import cats.Show
 import fs2.Stream
 import org.http4s.headers.{Authorization, Date}
 import org.http4s.{Header, Headers, Method, Request, Uri}
@@ -126,11 +125,10 @@ final case class RequestSigning(
         case PayloadSigning.Signed   => sha256(payload) map base16
       }
 
-
     sha256Payload map { payloadHash =>
       val canonicalRequest =
         List(
-          Show[Method].show(method),
+          method.toString,
           path.toString,
           renderCanonicalQueryString(queryParams),
           renderCanonicalHeaders(signedHeaders),

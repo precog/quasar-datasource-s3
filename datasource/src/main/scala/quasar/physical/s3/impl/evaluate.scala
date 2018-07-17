@@ -94,7 +94,7 @@ object evaluate {
     val circeJsonPipe = circePipe[F](jsonParsing)
 
     sign(request) >>= (r =>
-      streamRequestThroughFs2[F, Data](client, request) { resp =>
+      streamRequestThroughFs2[F, Data](client, r) { resp =>
         // convert the data to JSON, using the parsing method
         // of our choice
         val asJson: Stream[F, Json] = resp.body.through(circeJsonPipe)

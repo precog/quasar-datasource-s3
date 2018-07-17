@@ -33,10 +33,10 @@ import java.time.{ZoneOffset, LocalDateTime}
 
 import cats.arrow.FunctionK
 import cats.effect.{Effect, Async, Timer}
+import cats.syntax.flatMap._
 import fs2.Stream
+import org.http4s.{Request, Header, Headers}
 import org.http4s.client.Client
-import org.http4s.Request
-import org.http4s.Uri
 import pathy.Path
 import pathy.Path.{DirName, FileName}
 import scalaz.syntax.applicative._
@@ -68,7 +68,7 @@ final class S3DataSource[F[_]: Effect: Timer, G[_]: Async](
       }
     }
 
-  def children(path: ResourcePath): F[CommonError \/ Stream[G, (ResourceName, ResourcePathType)]] = {
+  def children(path: ResourcePath): F[CommonError \/ Stream[G, (ResourceName, ResourcePathType)]] =
     impl.children(client, config.bucket, dropEmpty(path.toPath), S3DataSource.signRequest(config)) map {
       case None =>
         ResourceError.pathNotFound(path).left[Stream[G, (ResourceName, ResourcePathType)]]
@@ -78,7 +78,6 @@ final class S3DataSource[F[_]: Effect: Timer, G[_]: Async](
           case \/-(Path.FileName(fn)) => (ResourceName(fn), ResourcePathType.Resource)
         }).covary[G].right[CommonError]
     }
-  }
 
   def isResource(path: ResourcePath): F[Boolean] = path match {
     case Root => false.pure[F]
@@ -104,7 +103,7 @@ final class S3DataSource[F[_]: Effect: Timer, G[_]: Async](
 }
 
 object S3DataSource {
-  def signRequest[F[_]: Effect: Timer](c: S3Config): Request[F] => F[Request[F]] = {
+  def signRequest[F[_]: Effect: Timer](c: S3Config): Request[F] => F[Request[F]] =
     c.credentials match {
       case Some(creds) => {
         val requestSigning = for {
@@ -118,9 +117,15 @@ object S3DataSource {
             datetime)
         } yield signing
 
-        req => requestSigning >>= (s => s.signedHeaders[F](req).map(h => req.withHeaders(h)))
+        req => {
+          val req0 = req.uri.host match {
+            case Some(host) => req.withHeaders(Headers(Header("host", host.value)))
+            case None => req
+          }
+
+          requestSigning >>= (s => s.signedHeaders[F](req0).map(h => req0.withHeaders(h)))
+        }
       }
       case None => req => req.pure[F]
     }
-  }
 }

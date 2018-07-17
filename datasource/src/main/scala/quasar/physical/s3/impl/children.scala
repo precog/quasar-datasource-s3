@@ -90,7 +90,8 @@ object children {
     for {
       // Send request to S3, parse the response as XML.
       signedRequest <- sign(request)
-      topLevelElem <- client.expect[xml.Elem](request)
+
+      topLevelElem <- client.expect[xml.Elem](signedRequest)
       // Grab child object names from the response.
       response <- for {
         contents <- Sync[F].suspend {
