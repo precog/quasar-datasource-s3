@@ -7,11 +7,11 @@ provides access to Amazon S3.
 
 ## How to use this
 
-1. Clone this repository (git@github.com:slamdata/quasar-s3.git)
-2. At the root of the repo, run ./sbt assembleDatasource. This will generate a tarball with a loadable `slamdata-backend` plugin
-3. The tarball can be found in `.targets/datasource/scala-2.12/quasar-s3-<version>-explode.tar.gz`
-4. Extract the tarball to SlamData Backend's plugin directory. By default that is `$HOME/.config/slamdata/plugin/`
-5. Run SlamData backend and the datasource should be available
+1. Clone this repository (`git@github.com:slamdata/quasar-s3.git`)
+2. At the root of the repo, run `./sbt assembleDatasource`. This will generate a tarball with a loadable `slamdata-backend` plugin
+in `.targets/datasource/scala-2.12/quasar-s3-<version>-explode.tar.gz`
+3. Extract the tarball to SlamData Backend's plugin directory. By default that is `$HOME/.config/slamdata/plugin/`
+4. Run SlamData backend and the datasource should be available
 
 ## Configuration
 
