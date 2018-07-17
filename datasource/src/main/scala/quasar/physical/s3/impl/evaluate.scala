@@ -87,7 +87,7 @@ object evaluate {
     val objectPath = Path.posixCodec.printPath(file).drop(1)
 
     // Put the object path after the bucket URI
-    val queryUri = uri / objectPath
+    val queryUri = appendPathUnencoded(uri, objectPath)
     val request = Request[F](uri = queryUri)
 
     // figure out how we're going to parse the object as JSON

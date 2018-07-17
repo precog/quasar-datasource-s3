@@ -20,24 +20,25 @@ import quasar.contrib.pathy._
 
 import slamdata.Predef._
 
-import org.http4s.client.Client
-import org.http4s.{Method, Request, Status, Uri, Headers}
-import org.http4s.headers.Range
-import pathy.Path
 import cats.effect.{Effect, Timer}
-import cats.syntax.flatMap._
 import cats.syntax.applicative._
+import cats.syntax.flatMap._
+import org.http4s.client.Client
+import org.http4s.headers.Range
+import org.http4s.{Method, Request, Status, Uri, Headers}
+import pathy.Path
 
 // The simplest method to implement, check that HEAD doesn't
 // give a 404.
 object isResource {
   def apply[F[_]: Effect: Timer](client: Client[F], uri: Uri, file: AFile, sign: Request[F] => F[Request[F]]): F[Boolean] = {
+
     // Print pathy.Path as POSIX path, without leading slash,
     // for S3's consumption.
     val objectPath = Path.posixCodec.printPath(file).drop(1)
 
     // Add the object's path to the bucket URI.
-    val queryUri = uri / objectPath
+    val queryUri = appendPathUnencoded(uri, objectPath)
 
     // Request with HEAD, to get metadata.
     // attempt to get the first byte to verify this is not empty

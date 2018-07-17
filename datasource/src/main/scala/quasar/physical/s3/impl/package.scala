@@ -16,9 +16,27 @@
 
 package quasar.physical.s3
 
+import slamdata.Predef._
+
+import cats.instances.char._
+import cats.instances.option._
+import cats.syntax.eq._
+import org.http4s.Uri
+
 package object impl {
   // this type comes up too many times to write out myself.
   // scala.Any is better than `_` here because existentials
   // are broken
   private type APath = pathy.Path[pathy.Path.Abs, scala.Any, pathy.Path.Sandboxed]
+
+  // This should be used instead of the `/` method from http4's Uri
+  // class since that method does URL encoding on the path, which
+  // breaks AWS request signing for S3
+  def appendPathUnencoded(uri: Uri, newSegment: Uri.Path): Uri = {
+    val newPath =
+      if (uri.path.isEmpty || uri.path.lastOption =!= Some('/')) s"${uri.path}/$newSegment"
+      else s"${uri.path}$newSegment"
+
+    uri.withPath(newPath)
+  }
 }

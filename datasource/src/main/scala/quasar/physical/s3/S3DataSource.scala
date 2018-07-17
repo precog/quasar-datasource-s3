@@ -119,7 +119,7 @@ object S3DataSource {
 
         req => {
           val req0 = req.uri.host match {
-            case Some(host) => req.withHeaders(Headers(Header("host", host.value)))
+            case Some(host) => req.withHeaders(req.headers ++ Headers(Header("host", host.value)))
             case None => req
           }
 
