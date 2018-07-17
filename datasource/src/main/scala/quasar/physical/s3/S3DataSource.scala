@@ -111,7 +111,7 @@ object S3DataSource {
           datetime <- Effect[F].catchNonFatal(LocalDateTime.ofEpochSecond(seconds, 0, ZoneOffset.UTC))
           signing = RequestSigning(
             Credentials(creds.accessKey, creds.secretKey, None),
-            Region(creds.region),
+            creds.region,
             ServiceName.S3,
             PayloadSigning.Signed,
             datetime)

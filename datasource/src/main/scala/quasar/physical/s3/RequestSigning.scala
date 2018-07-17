@@ -80,7 +80,7 @@ object RequestSigning {
   private def sign(stringToSign: String, now: LocalDateTime, credentials: Credentials, region: Region, service: ServiceName): String = {
 
     val key: Array[Byte] = {
-      val kSecret:  Array[Byte] = ("AWS4" + credentials.secretKey).getBytes(StandardCharsets.UTF_8)
+      val kSecret:  Array[Byte] = ("AWS4" + credentials.secretKey.value).getBytes(StandardCharsets.UTF_8)
       val kDate:    Array[Byte] = hmacSha256(now.format(DateTimeFormatter.BASIC_ISO_DATE), kSecret)
       val kRegion:  Array[Byte] = hmacSha256(region.name, kDate)
       val kService: Array[Byte] = hmacSha256(service.name, kRegion)
@@ -155,7 +155,7 @@ final case class RequestSigning(
 
       val authorizationHeaderValue =
         "AWS4-HMAC-SHA256 Credential=" +
-          credentialsNow.accessKey + "/" + credentialScope +
+          credentialsNow.accessKey.value + "/" + credentialScope +
           ", SignedHeaders=" + signedHeaderKeys +
           ", Signature=" + signature
 
@@ -175,11 +175,9 @@ final case class RequestSigning(
 
 @SuppressWarnings(Array("org.wartremover.warts.DefaultArguments"))
 final case class Credentials(
-    accessKey:    String,
-    secretKey:    String,
+    accessKey:    AccessKey,
+    secretKey:    SecretKey,
     sessionToken: Option[String] = None)
-
-final case class Region(name: String) extends AnyVal
 
 abstract class ServiceName(val name: String)
 
