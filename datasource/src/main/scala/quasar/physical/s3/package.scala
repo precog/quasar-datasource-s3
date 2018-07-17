@@ -16,7 +16,7 @@
 
 package quasar.physical.s3
 
-import quasar.api.DataSourceType
+import quasar.api.datasource.DatasourceType
 
 import eu.timepit.refined.auto._
 
@@ -28,5 +28,5 @@ object S3JsonParsing {
 }
 
 package object s3 {
-  val datasourceKind: DataSourceType = DataSourceType("s3", 1L)
+  val datasourceKind: DatasourceType = DatasourceType("s3", 1L)
 }

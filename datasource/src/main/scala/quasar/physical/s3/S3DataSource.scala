@@ -20,8 +20,9 @@ import quasar.Data
 import quasar.api.ResourceError
 import quasar.api.ResourceError.{CommonError, ReadError}
 import quasar.api.ResourcePath.{Leaf, Root}
-import quasar.api.{DataSourceType, ResourceName, ResourcePath, ResourcePathType}
-import quasar.connector.datasource.LightweightDataSource
+import quasar.api.datasource.DatasourceType
+import quasar.api.{ResourceName, ResourcePath, ResourcePathType}
+import quasar.connector.datasource.LightweightDatasource
 import quasar.contrib.cats.effect._
 import quasar.contrib.pathy.APath
 
@@ -44,9 +45,9 @@ final class S3DataSource[F[_]: Effect, G[_]: Async] (
   client: Client[F],
   bucket: Uri,
   s3JsonParsing: S3JsonParsing)(ec: ExecutionContext)
-    extends LightweightDataSource[F, Stream[G, ?], Stream[G, Data]] {
+    extends LightweightDatasource[F, Stream[G, ?], Stream[G, Data]] {
 
-  def kind: DataSourceType = s3.datasourceKind
+  def kind: DatasourceType = s3.datasourceKind
 
   val shutdown: F[Unit] = client.shutdown
 
