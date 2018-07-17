@@ -1,63 +1,44 @@
-# Quasar S3 Connector
+# Quasar S3 Datasource
 
 [![Build Status](https://travis-ci.org/slamdata/quasar-s3.svg?branch=master)](https://travis-ci.org/slamdata/quasar-s3)
 
-A connector for the Quasar open source analytics engine, that
+A datasource for the Quasar open source analytics engine, that
 provides access to Amazon S3.
 
-Also documents how to create a lightweight connector for
-quasar.
+## How to use this
 
-## The API
+1. Clone this repository (git@github.com:slamdata/quasar-s3.git)
+2. At the root of the repo, run ./sbt assembleDatasource. This will generate a tarball with a loadable `slamdata-backend` plugin
+3. The tarball can be found in `.targets/datasource/scala-2.12/quasar-s3-<version>-explode.tar.gz`
+4. Extract the tarball to SlamData Backend's plugin directory. By default that is `$HOME/.config/slamdata/plugin/`
+5. Run SlamData backend and the datasource should be available
 
-*All of this is subject to change, and **will** be changed in the near future.*
+## Configuration
 
-S3-specific documentation of the connector API can be found
-[here](lwc/src/main/scala/quasar/physical/s3/S3LWC.scala),
-and [here](lwc/src/main/scala/quasar/physical/s3/S3LWFS.scala).
+You can create a new S3 datasource after you've loaded the plugin into
+Quasar. Refer to the previous section for instructions on how to do
+that. In order to create a datasource, you will need to send a PUT
+request to `/datasource/<your datasource name>` including a JSON
+document specifiying the datasource's configuration. An example of a
+JSON document to create a datasource:
 
-Documentation of the implementation can be found
-[here](lwc/src/main/scala/quasar/physical/s3/impl).
+```
+{
+	"bucket": "https://qsecure.s3.amazonaws.com",
+	"jsonParsing": "lineDelimited"
+}
+```
 
-The API is separated into two stages:
+`jsonParsing` can be either `lineDelimited` to parse JSON documents
+separated by newlines or `array` to parse JSON documents held in a
+JSON array. You'll need to specify a `Content-Type` header with the
+information regarding this datasource. For example, to use version 1
+of this datasource you may specify:
 
-1. The lightweight filesystem API (`LightweightFileSystem`)
-which provides the filesystem operations that Quasar relies on.
-2. The lightweight connector API (`LightweightConnector`) which
-provides lightweight filesystems when configured.
+```
+Content-Type: application/vnd.slamdata.datasource.s3; version="1"
+```
 
-For S3, you can think of each filesystem as a bucket, and
-each connector as associating a bucket's URI with the bucket
-itself.
-
-### Lightweight Filesystems
-
-Lightweight filesystems are similar to everyday filesystems.
-They have notions of "path", "folder" and "file" which are
-analogous to paths, folders and files on your local
-filesystem. We use `scala-pathy` to represent paths, which
-provides separate types for file paths and folder paths.
-
-Lightweight filesystems provide three operations:
-- `children`
-- `read`
-- `exists`
-
-`children` is comparable to POSIX `ls`, and Windows `dir`; it
-lists the files and folders in a directory.
-
-`read` is comparable to POSIX `cat`, except that it reads files
-as JSON rather than plain text.
-
-`exists` checks if a file exists on a filesystem.
-
-### Lightweight Connectors
-
-Lightweight connectors provide a single method, `init`,
-which takes a `ConnectionUri` and returns
-a `LightweightFileSystem`. Note that `ConnectionUri` doesn't
-have to be a valid URI; you can include any kind of
-configuration data inside as well.
 
 ## Thanks to Sponsors
 
