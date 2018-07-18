@@ -18,9 +18,11 @@ package quasar.physical.s3
 
 
 import quasar.Data
-import quasar.api.{DataSourceType, ResourcePath}
-import quasar.connector.{DataSource, LightweightDataSourceModule}
-import quasar.api.DataSourceError.{InitializationError, MalformedConfiguration}
+import quasar.api.datasource.DatasourceError.{InitializationError, MalformedConfiguration}
+import quasar.api.ResourcePath
+import quasar.api.datasource.DatasourceType
+import quasar.connector.Datasource
+import quasar.connector.LightweightDatasourceModule
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -34,18 +36,18 @@ import slamdata.Predef.{Stream => _, _}
 import org.http4s.client.blaze.Http1Client
 import shims._
 
-object S3DataSourceModule extends LightweightDataSourceModule {
-  def kind: DataSourceType = s3.datasourceKind
+object S3DataSourceModule extends LightweightDatasourceModule {
+  def kind: DatasourceType = s3.datasourceKind
 
-  def lightweightDataSource[
+  def lightweightDatasource[
       F[_]: ConcurrentEffect: Timer,
       G[_]: ConcurrentEffect: Timer](
       config: Json)
-      : F[InitializationError[Json] \/ DataSource[F, Stream[G, ?], ResourcePath, Stream[G, Data]]] = {
+      : F[InitializationError[Json] \/ Datasource[F, Stream[G, ?], ResourcePath, Stream[G, Data]]] = {
     config.as[S3Config].result match {
       case Right(s3Config) => {
         Http1Client[F]() map { client =>
-          val ds: DataSource[F, Stream[G, ?], ResourcePath, Stream[G, Data]] =
+          val ds: Datasource[F, Stream[G, ?], ResourcePath, Stream[G, Data]] =
             new S3DataSource[F, G](client, s3Config.bucket, s3Config.parsing)(global)
 
           ds.right[InitializationError[Json]]
@@ -54,7 +56,7 @@ object S3DataSourceModule extends LightweightDataSourceModule {
 
       case Left((msg, _)) =>
         (MalformedConfiguration(kind, config, msg): InitializationError[Json])
-          .left[DataSource[F, Stream[G, ?], ResourcePath, Stream[G, Data]]].point[F]
+          .left[Datasource[F, Stream[G, ?], ResourcePath, Stream[G, Data]]].point[F]
     }
   }
 }
