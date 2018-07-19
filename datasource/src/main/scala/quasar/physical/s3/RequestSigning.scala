@@ -39,12 +39,13 @@ import org.http4s.{Header, Headers, Method, Request, Uri}
   * inspired by: https://github.com/inreachventures/aws-signing-request-interceptor
   */
 object RequestSigning {
+  private val hashAlg = "SHA-256"
 
   private def sha256[F[_]: Sync](payload: Stream[F, Byte]): F[Array[Byte]] =
-    payload.chunks.compile.fold(MessageDigest.getInstance("SHA-256"))((md, chunk) => { md.update(chunk.toArray); md }).map(_.digest)
+    payload.chunks.compile.fold(MessageDigest.getInstance(hashAlg))((md, chunk) => { md.update(chunk.toArray); md }).map(_.digest)
 
   private def sha256(payload: Array[Byte]): Array[Byte] = {
-    val md: MessageDigest = MessageDigest.getInstance("SHA-256")
+    val md: MessageDigest = MessageDigest.getInstance(hashAlg)
     md.update(payload)
     md.digest
   }
@@ -61,8 +62,10 @@ object RequestSigning {
       .mkString("&")
 
   private def hmacSha256(data: String, key: Array[Byte]): Array[Byte] = {
-    val mac: Mac = Mac.getInstance("HmacSHA256")
-    mac.init(new SecretKeySpec(key, "HmacSHA256"))
+    val macAlg = "HmacSHA256"
+    val mac: Mac = Mac.getInstance(macAlg)
+
+    mac.init(new SecretKeySpec(key, macAlg))
     mac.doFinal(data.getBytes(StandardCharsets.UTF_8))
   }
 
