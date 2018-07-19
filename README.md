@@ -70,6 +70,24 @@ example:
 buckets, you need to include a `Content-Type` header. Refer to the previous
 section for an example.
 
+### Running the test suite for secure buckets
+
+You need to decode the base64-encoded credentials.
+
+For GNU `base64`:
+
+```
+base64 -d testCredentials.json.b64 > testCredentials.json
+```
+
+For BSD (or macOS) `base64`:
+
+```
+base64 -D -i testCredentials.json.b64 -o testCredentials.json
+```
+
+After this, you should be able to run the `SecureS3DataSourceSpec` spec
+
 
 ## Thanks to Sponsors
 
