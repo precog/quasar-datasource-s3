@@ -96,7 +96,7 @@ object children {
       response <- for {
         contents <- Sync[F].suspend {
           // Grab <Contents>.
-          Sync[F].catchNonFatal((topLevelElem \\ "Contents"))
+          Sync[F].catchNonFatal((topLevelElem \ "Contents"))
             .adaptError {
               case ex: Exception =>
                 new Exception("XML received from AWS API has no top-level <Contents>", ex)
@@ -105,7 +105,7 @@ object children {
 
         keyCount <- Sync[F].suspend {
           // Grab <KeyCount> to ensure this response is not empty.
-          Sync[F].catchNonFatal((topLevelElem \\ "KeyCount").text.toInt)
+          Sync[F].catchNonFatal((topLevelElem \ "KeyCount").text.toInt)
             .adaptError {
               case ex: Exception =>
                 new Exception("XML received from AWS API has no top-level <KeyCount>", ex)
@@ -114,7 +114,7 @@ object children {
 
         // Grab all of the <Key> elements from <Contents>.
         names <- contents.toList.traverse[F, String] { elem =>
-          Sync[F].catchNonFatal((elem \\ "Key").text)
+          Sync[F].catchNonFatal((elem \ "Key").text)
             .adaptError {
               case ex: Exception =>
                 new Exception("XML received from AWS API has no <Key> elements under <Contents>", ex)

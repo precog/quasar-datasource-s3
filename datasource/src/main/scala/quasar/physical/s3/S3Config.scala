@@ -103,7 +103,7 @@ object S3Config {
 
 object S3Credentials {
   private val incompleteCredsMsg =
-    "The 'credentials' key must include 'accessKey', 'secretKey' AND 'region'"
+    "The 'credentials' key must include 'accessKey', 'secretKey', and 'region'"
 
   implicit val decodeJson: DecodeJson[S3Credentials] =
     DecodeJson { c =>
