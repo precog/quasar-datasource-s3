@@ -4,6 +4,10 @@ jdk: oraclejdk8
 dist: trusty
 sudo: false
 
+# Just protecting against automated scrapers
+before_script:
+  - base64 -d testCredentials.json.b64 > testCredentials.json
+
 script:
   - sbt test datasource/assembly assembleDatasource
 

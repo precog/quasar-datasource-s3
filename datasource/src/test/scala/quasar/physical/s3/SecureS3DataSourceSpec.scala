@@ -23,7 +23,7 @@ import scala.io.{Source, Codec}
 
 import java.io.File
 
-import argonaut.{Parse, DecodeJson, Json}
+import argonaut.{Parse, DecodeJson}
 import cats.effect.{IO, Sync}
 import cats.syntax.flatMap._
 import cats.syntax.applicative._
@@ -34,14 +34,14 @@ final class SecureS3DataSourceSpec extends S3DataSourceSpec {
   override val discoveryLD = new S3DataSource[IO, IO](
     Http1Client[IO]().unsafeRunSync,
     S3Config(
-      Uri.uri("https://s3.amazonaws.com/qsecure"),
+      Uri.uri("https://s3.amazonaws.com/slamdata-private-test"),
       S3JsonParsing.LineDelimited,
       Some(readCredentials.unsafeRunSync)))(global)
 
   override val discovery = new S3DataSource[IO, IO](
     Http1Client[IO]().unsafeRunSync,
     S3Config(
-      Uri.uri("https://s3.amazonaws.com/qsecure"),
+      Uri.uri("https://s3.amazonaws.com/slamdata-private-test"),
       S3JsonParsing.JsonArray,
       Some(readCredentials.unsafeRunSync)))(global)
 
@@ -51,14 +51,15 @@ final class SecureS3DataSourceSpec extends S3DataSourceSpec {
     val file = Sync[IO].catchNonFatal(new File("testCredentials.json"))
     val msg = "Failed to read testCredentials.json"
 
-    val src = file >>= (f => IO(Source.fromFile(f)(Codec.UTF8)))
-    val jsonConfig: IO[Json] =
-      src.map(_.getLines.mkString) >>= (s =>
-        Parse.parse(s).toOption.map(_.pure[IO]).getOrElse(IO.raiseError(new Exception(msg))))
+    val src = (file >>= (f =>
+      IO(Source.fromFile(f)(Codec.UTF8)))).map(_.getLines.mkString)
+
+    val jsonConfig = src >>= (p =>
+      Parse.parse(p).toOption.map(_.pure[IO])
+        .getOrElse(IO.raiseError(new Exception(msg))))
 
     jsonConfig
       .map(DecodeJson.of[S3Credentials].decodeJson(_))
-      .map(_.toOption) >>= (creds =>
-        creds.fold[IO[S3Credentials]](IO.raiseError(new Exception(msg)))(_.pure[IO]))
+      .map(_.toOption) >>= (_.fold[IO[S3Credentials]](IO.raiseError(new Exception(msg)))(_.pure[IO]))
   }
 }
