@@ -31,6 +31,10 @@ import org.http4s.headers.{Authorization, Date}
 import org.http4s.{Header, Headers, Method, Request, Uri}
 
 /**
+  * Extracted from aws4s: https://github.com/aws4s/aws4s
+  */
+
+/**
   * Based on https://github.com/ticofab/aws-request-signer,
   * inspired by: https://github.com/inreachventures/aws-signing-request-interceptor
   */
