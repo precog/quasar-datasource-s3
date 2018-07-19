@@ -20,24 +20,73 @@ Quasar. Refer to the previous section for instructions on how to do
 that. In order to create a datasource, you will need to send a PUT
 request to `/datasource/<your datasource name>` including a JSON
 document specifiying the datasource's configuration. An example of a
-JSON document to create a datasource:
+JSON configuration to create a datasource that parses line-delimited JSON:
 
 ```json
 {
-  "bucket": "https://qsecure.s3.amazonaws.com",
+  "bucket": "https://yourbucket.s3.amazonaws.com",
   "jsonParsing": "lineDelimited"
 }
 ```
 
-`jsonParsing` can be either `lineDelimited` to parse JSON documents
-separated by newlines or `array` to parse JSON documents held in a
-JSON array. You'll need to specify a `Content-Type` header with the
+As another example, this is the JSON configuration to parse array
+JSON:
+
+```json
+{
+  "bucket": "https://yourbucket.s3.amazonaws.com",
+  "jsonParsing": "array"
+}
+```
+
+You also need to specify a `Content-Type` header with
 information regarding this datasource. For example, to use version 1
 of this datasource you may specify:
 
 ```
 Content-Type: application/vnd.slamdata.datasource.s3; version="1"
 ```
+
+### Secure buckets
+
+If your bucket is not public you need to include a `credentials`
+subdocument with the credentials you use to access the bucket. For
+example:
+
+```
+{
+  "bucket":"https://some.bucket.uri",
+  "jsonParsing":"array",
+  "credentials": {
+    "accessKey":"some access key",
+    "secretKey":"super secret key",
+    "region":"us-east-1"
+  }
+}
+```
+
+`accessKey`, `secretKey`, and `region` are all mandatory. You may omit
+`credentials` entirely if your bucket is public. As with public
+buckets, you need to include a `Content-Type` header. Refer to the previous
+section for an example.
+
+### Running the test suite for secure buckets
+
+You need to decode the base64-encoded credentials.
+
+For GNU `base64`:
+
+```
+base64 -d testCredentials.json.b64 > testCredentials.json
+```
+
+For BSD (or macOS) `base64`:
+
+```
+base64 -D -i testCredentials.json.b64 -o testCredentials.json
+```
+
+After this, you should be able to run the `SecureS3DataSourceSpec` spec
 
 
 ## Thanks to Sponsors

@@ -11,3 +11,4 @@ tmp
 .settings
 *.sw*
 tags
+testCredentials.json

@@ -23,7 +23,7 @@ import quasar.physical.s3.S3JsonParsing
 
 import slamdata.Predef._
 
-import cats.effect.Sync
+import cats.effect.{Effect, Timer, Sync}
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
 import cats.syntax.option._
@@ -76,28 +76,34 @@ object evaluate {
   }
 
   // putting it all together.
-  def apply[F[_]: Sync](jsonParsing: S3JsonParsing, client: Client[F], uri: Uri, file: AFile): F[Option[Stream[F, Data]]] = {
+  def apply[F[_]: Effect: Timer](
+    jsonParsing: S3JsonParsing,
+    client: Client[F],
+    uri: Uri,
+    file: AFile,
+    sign: Request[F] => F[Request[F]]): F[Option[Stream[F, Data]]] = {
     // convert the pathy Path to a POSIX path, dropping
     // the first slash, like S3 expects for object paths
     val objectPath = Path.posixCodec.printPath(file).drop(1)
 
     // Put the object path after the bucket URI
-    val queryUri = uri / objectPath
+    val queryUri = appendPathUnencoded(uri, objectPath)
     val request = Request[F](uri = queryUri)
 
     // figure out how we're going to parse the object as JSON
     val circeJsonPipe = circePipe[F](jsonParsing)
 
-    streamRequestThroughFs2[F, Data](client, request) { resp =>
-      // convert the data to JSON, using the parsing method
-      // of our choice
-      val asJson: Stream[F, Json] = resp.body.through(circeJsonPipe)
+    sign(request) >>= (r =>
+      streamRequestThroughFs2[F, Data](client, r) { resp =>
+        // convert the data to JSON, using the parsing method
+        // of our choice
+        val asJson: Stream[F, Json] = resp.body.through(circeJsonPipe)
 
-      // convert the JSON from circe's representation to ours
-      val asData: Stream[F, Data] = asJson.map(circeJsonToData)
+        // convert the JSON from circe's representation to ours
+        val asData: Stream[F, Data] = asJson.map(circeJsonToData)
 
-      // and we're done.
-      asData
-    }
+        // and we're done.
+        asData
+      })
   }
 }

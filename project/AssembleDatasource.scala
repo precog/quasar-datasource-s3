@@ -75,6 +75,8 @@ object AssembleDatasource {
         datasourcePluginsFolder,
         CachePolicy.Update)
 
+      val quasarVersion = IO.read(file("./quasar-version")).trim
+
       // I don't want to add kind-projector to  the compiler
       // plugins, so I'm hard-coding this type alias.
       // later on we're going to make a `List[FileError \/ A]`
@@ -157,7 +159,7 @@ object AssembleDatasource {
         files = datasourcePluginsFolder.listFiles.map(p => datasourcePluginsFolder.toPath.relativize(p.toPath)).mkString(" ")
 
         // the `plugins` tarball's location
-        tarPath = new File(buildOutputFolder, s"quasar-s3-$thisVersion-explode.tar.gz")
+        tarPath = new File(buildOutputFolder, s"quasar-s3-$thisVersion-q$quasarVersion-explode.tar.gz")
 
         // the command we run to finish up: zip up (-c) all of
         // the files in our plugins folder ($files), with the

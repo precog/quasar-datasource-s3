@@ -21,7 +21,7 @@ import quasar.contrib.pathy._
 import slamdata.Predef._
 
 import cats.Functor
-import cats.effect.Sync
+import cats.effect.{Sync, Timer, Effect}
 import cats.instances.int._
 import cats.instances.list._
 import cats.instances.option._
@@ -31,7 +31,7 @@ import cats.syntax.functor._
 import cats.syntax.monadError._
 import cats.syntax.option._
 import cats.syntax.traverse._
-import org.http4s.Uri
+import org.http4s.{Uri, Request}
 import org.http4s.client.Client
 import org.http4s.scalaxml.{xml => xmlDecoder}
 import pathy.Path
@@ -50,11 +50,15 @@ object children {
   // sends them in.
   //
   // FIXME: dir should be ADir and pathToDir should be deleted
-  def apply[F[_]: Sync](client: Client[F], bucket: Uri, dir: APath): F[Option[List[PathSegment]]] = {
+  def apply[F[_]: Effect: Timer](
+    client: Client[F],
+    bucket: Uri,
+    dir: APath,
+    sign: Request[F] => F[Request[F]]): F[Option[List[PathSegment]]] = {
     val FO = Functor[F].compose[Option]
 
     val filtered =
-      FO.map(descendants(client, bucket, dir))(paths =>
+      FO.map(descendants(client, bucket, dir, sign))(paths =>
         paths.filter(path => Path.parentDir(path) === pathToDir(dir)))
 
     FO.map(filtered)(paths => paths.flatMap(Path.peel(_).toList).map(_._2))
@@ -62,7 +66,11 @@ object children {
 
 
   // Lists all objects and prefixes in a bucket. This needs to be filtered
-  private def descendants[F[_]: Sync](client: Client[F], bucket: Uri, dir: APath): F[Option[List[APath]]] = {
+  private def descendants[F[_]: Effect: Timer](
+    client: Client[F],
+    bucket: Uri,
+    dir: APath,
+    sign: Request[F] => F[Request[F]]): F[Option[List[APath]]] = {
     // Converts a pathy Path to an S3 object prefix.
     val objectPrefix = aPathToObjectPrefix(dir)
 
@@ -77,57 +85,61 @@ object children {
         listingQuery
           .withQueryParam("prefix", prefix))
 
-      for {
-        // Send request to S3, parse the response as XML.
-        topLevelElem <- client.expect[xml.Elem](queryUri)
-        // Grab child object names from the response.
-        response <- for {
-          contents <- Sync[F].suspend {
-            // Grab <Contents>.
-            Sync[F].catchNonFatal((topLevelElem \\ "Contents"))
-              .adaptError {
-                case ex: Exception =>
-                  new Exception("XML received from AWS API has no top-level <Contents>", ex)
-              }
-          }
+    val request = Request[F](uri = queryUri)
 
-          keyCount <- Sync[F].suspend {
-            // Grab <KeyCount> to ensure this response is not empty.
-            Sync[F].catchNonFatal((topLevelElem \\ "KeyCount").text.toInt)
-              .adaptError {
-                case ex: Exception =>
-                  new Exception("XML received from AWS API has no top-level <KeyCount>", ex)
-              }
-          }
+    for {
+      // Send request to S3, parse the response as XML.
+      signedRequest <- sign(request)
 
-          // Grab all of the <Key> elements from <Contents>.
-          names <- contents.toList.traverse[F, String] { elem =>
-            Sync[F].catchNonFatal((elem \\ "Key").text)
-              .adaptError {
-                case ex: Exception =>
-                  new Exception("XML received from AWS API has no <Key> elements under <Contents>", ex)
-              }
-          }
-        } yield (names, keyCount)
-
-        (children, keyCount) = response
-
-        // Convert S3 object names to paths.
-        childPaths <- children.traverse(s3NameToPath)
-          .fold(Sync[F].raiseError[List[APath]](new Exception(s"Failed to parse object path in S3 API response")))(Sync[F].pure)
-
-        // Deal with some S3 idiosyncrasies.
-        // TODO: Pagination
-
-        result = if (keyCount === 0) {
-          None
-        } else {
-          // AWS includes the folder itself in the returned
-          // results, so we have to remove it.
-          // TODO: Report an error if there are duplicates. Remove duplicates.
-          Some(childPaths.filter(path => path =!= dir))
+      topLevelElem <- client.expect[xml.Elem](signedRequest)
+      // Grab child object names from the response.
+      response <- for {
+        contents <- Sync[F].suspend {
+          // Grab <Contents>.
+          Sync[F].catchNonFatal((topLevelElem \ "Contents"))
+            .adaptError {
+              case ex: Exception =>
+                new Exception("XML received from AWS API has no top-level <Contents>", ex)
+            }
         }
-      } yield result
+
+        keyCount <- Sync[F].suspend {
+          // Grab <KeyCount> to ensure this response is not empty.
+          Sync[F].catchNonFatal((topLevelElem \ "KeyCount").text.toInt)
+            .adaptError {
+              case ex: Exception =>
+                new Exception("XML received from AWS API has no top-level <KeyCount>", ex)
+            }
+        }
+
+        // Grab all of the <Key> elements from <Contents>.
+        names <- contents.toList.traverse[F, String] { elem =>
+          Sync[F].catchNonFatal((elem \ "Key").text)
+            .adaptError {
+              case ex: Exception =>
+                new Exception("XML received from AWS API has no <Key> elements under <Contents>", ex)
+            }
+        }
+      } yield (names, keyCount)
+
+      (children, keyCount) = response
+
+      // Convert S3 object names to paths.
+      childPaths <- children.traverse(s3NameToPath)
+      .fold(Sync[F].raiseError[List[APath]](new Exception(s"Failed to parse object path in S3 API response")))(Sync[F].pure)
+
+      // Deal with some S3 idiosyncrasies.
+      // TODO: Pagination
+
+      result = if (keyCount === 0) {
+        None
+      } else {
+        // AWS includes the folder itself in the returned
+        // results, so we have to remove it.
+        // TODO: Report an error if there are duplicates. Remove duplicates.
+        Some(childPaths.filter(path => path =!= dir))
+      }
+    } yield result
   }
 
   private def aPathToObjectPrefix(apath: APath): Option[String] = {
