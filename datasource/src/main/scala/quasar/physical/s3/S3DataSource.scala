@@ -93,8 +93,6 @@ final class S3DataSource[F[_]: Effect, G[_]: Async] (
     }
 
   private val FToG: FunctionK[F, G] = new FunctionK[F, G] {
-    implicit def ec0: ExecutionContext = ec
-
     def apply[A](fa: F[A]): G[A] = fa.to[G]
   }
 }

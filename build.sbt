@@ -12,42 +12,17 @@ import sbt._, Keys._
 import sbt.std.Transform.DummyTaskMap
 import sbt.TestFrameworks.Specs2
 import sbtrelease._, ReleaseStateTransformations._, Utilities._
-import scoverage._
-import slamdata.SbtSlamData.transferPublishAndTagResources
 
 val BothScopes = "test->test;compile->compile"
 
 // Exclusive execution settings
 lazy val ExclusiveTests = config("exclusive") extend Test
 
-val ExclusiveTest = Tags.Tag("exclusive-test")
-
 def exclusiveTasks(tasks: Scoped*) =
   tasks.flatMap(inTask(_)(tags := Seq((ExclusiveTest, 1))))
 
-lazy val buildSettings = commonBuildSettings ++ Seq(
-  organization := "com.slamdata",
-  scalaOrganization := "org.scala-lang",
-  scalacOptions --= Seq(
-    "-Yliteral-types",
-    "-Xstrict-patmat-analysis",
-    "-Yinduction-heuristics",
-    "-Ykind-polymorphism",
-    "-Ybackend:GenBCode"
-  ),
-  initialize := {
-    val version = sys.props("java.specification.version")
-    assert(
-      Integer.parseInt(version.split("\\.")(1)) >= 8,
-      "Java 8 or above required, found " + version)
-  },
+lazy val buildSettings = Seq(
 
-  ScoverageKeys.coverageHighlighting := true,
-
-  scalacOptions += "-target:jvm-1.8",
-
-  // NB: -Xlint triggers issues that need to be fixed
-  scalacOptions --= Seq("-Xlint"),
   // NB: Some warts are disabled in specific projects. Here’s why:
   //   • AsInstanceOf   – wartremover/wartremover#266
   //   • others         – simply need to be reviewed & fixed
@@ -61,8 +36,6 @@ lazy val buildSettings = commonBuildSettings ++ Seq(
   testOptions in Test := Seq(Tests.Argument(Specs2, "exclude", "exclusive", "showtimes")),
   // Exclusive tests include only those tagged with 'exclusive'.
   testOptions in ExclusiveTests := Seq(Tests.Argument(Specs2, "include", "exclusive", "showtimes")),
-
-  logBuffered in Test := isTravisBuild.value,
 
   console := { (console in Test).value }, // console alias test:console
   assemblyMergeStrategy in assembly := {
@@ -95,7 +68,7 @@ concurrentRestrictions in Global := {
 // Tasks tagged with `ExclusiveTest` should be run exclusively.
 concurrentRestrictions in Global += Tags.exclusive(ExclusiveTest)
 
-lazy val publishSettings = commonPublishSettings ++ Seq(
+lazy val publishSettings = Seq(
   performMavenCentralSync := false,
   organizationName := "SlamData Inc.",
   organizationHomepage := Some(url("http://quasar-analytics.org")),
@@ -163,7 +136,6 @@ def createBackendEntry(childPath: Seq[File], parentPath: Seq[File]): Seq[File] =
 lazy val root = project.in(file("."))
   .settings(commonSettings)
   .settings(noPublishSettings)
-  .settings(transferPublishAndTagResources)
   .settings(aggregate in assembly := false)
   .settings(excludeTypelevelScalaLibrary)
   .aggregate(datasource)
