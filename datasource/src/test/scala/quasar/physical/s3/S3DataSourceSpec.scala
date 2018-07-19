@@ -32,7 +32,7 @@ import shims._
 
 import S3DataSourceSpec._
 
-final class S3DataSourceSpec extends ResourceDiscoverySpec[IO, Stream[IO, ?]] {
+class S3DataSourceSpec extends ResourceDiscoverySpec[IO, Stream[IO, ?]] {
   "the root of a bucket with a trailing slash is not a resource" >>* {
     val root = ResourcePath.root() / ResourceName("")
     discovery.isResource(root).map(_ must beFalse)
@@ -107,14 +107,14 @@ final class S3DataSourceSpec extends ResourceDiscoverySpec[IO, Stream[IO, ?]] {
   val discoveryLD = new S3DataSource[IO, IO](
     Http1Client[IO]().unsafeRunSync,
     S3Config(
-      Uri.unsafeFromString("http://qconnector-tests.s3.amazonaws.com"),
+      Uri.uri("https://s3.amazonaws.com/slamdata-public-test"),
       S3JsonParsing.LineDelimited,
       None))(global)
 
   val discovery = new S3DataSource[IO, IO](
     Http1Client[IO]().unsafeRunSync,
     S3Config(
-      Uri.unsafeFromString("http://qconnector-tests.s3.amazonaws.com"),
+      Uri.uri("https://s3.amazonaws.com/slamdata-public-test"),
       S3JsonParsing.JsonArray,
       None))(global)
 

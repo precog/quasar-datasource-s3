@@ -23,6 +23,7 @@ import cats.syntax.apply._
 import cats.syntax.flatMap._
 import cats.instances.option._
 import slamdata.Predef._
+import shims._
 
 final case class S3Config(bucket: Uri, parsing: S3JsonParsing, credentials: Option[S3Credentials])
 
@@ -75,29 +76,45 @@ object S3Config {
 
   private val failureMsg =
     "Failed to parse configuration for S3 connector."
-  private val incompleteCredsMsg =
-    "The 'credentials' key must include 'accessKey', 'secretKey' AND 'region'"
 
   implicit val decodeJson: DecodeJson[S3Config] =
     DecodeJson { c =>
       val b = c.get[String]("bucket").toOption >>= (Uri.fromString(_).toOption)
       val jp = c.get[String]("jsonParsing").toOption >>= (parseStrings.get(_))
-      val creds = c.downField("credentials")
-      val akey = creds.get[String]("accessKey").toOption.map(AccessKey(_))
-      val skey = creds.get[String]("secretKey").toOption.map(SecretKey(_))
-      val rkey = creds.get[String]("region").toOption.map(Region(_))
 
-      (creds.success, b, jp) match {
-        case (Some(_), Some(bk), Some(p)) =>
-          (akey, skey, rkey).mapN(S3Credentials(_, _, _))
-            .fold(DecodeResult.fail[S3Config](incompleteCredsMsg, c.history))(creds0 =>
-              DecodeResult.ok[S3Config](S3Config(bk, p, Some(creds0))))
+      (c.downField("credentials").success, b, jp) match {
+        case (Some(_), Some(bk), Some(p)) => {
+          val creds = DecodeJson.of[S3Credentials].decode(c)
+
+          creds.toOption match {
+            case Some(creds0) => DecodeResult.ok(S3Config(bk, p, Some(creds0)))
+            case None => DecodeResult.fail(creds.message.getOrElse(failureMsg), c.history)
+          }
+        }
 
         case (None, Some(bk), Some(p)) =>
           DecodeResult.ok(S3Config(bk, p, None))
 
         case _ =>
           DecodeResult.fail(failureMsg, c.history)
+      }
+    }
+}
+
+object S3Credentials {
+  private val incompleteCredsMsg =
+    "The 'credentials' key must include 'accessKey', 'secretKey' AND 'region'"
+
+  implicit val decodeJson: DecodeJson[S3Credentials] =
+    DecodeJson { c =>
+      val creds = c.downField("credentials")
+      val akey = creds.get[String]("accessKey").map(AccessKey(_)).toOption
+      val skey = creds.get[String]("secretKey").map(SecretKey(_)).toOption
+      val rkey = creds.get[String]("region").map(Region(_)).toOption
+
+      (akey, skey, rkey).mapN(S3Credentials(_, _, _)) match {
+        case Some(creds0) => DecodeResult.ok(creds0)
+        case None => DecodeResult.fail(incompleteCredsMsg, c.history)
       }
     }
 }
