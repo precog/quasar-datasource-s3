@@ -25,22 +25,26 @@ import cats.effect.{Sync, Timer, Effect}
 import cats.instances.int._
 import cats.instances.list._
 import cats.instances.option._
+import cats.syntax.applicative._
 import cats.syntax.eq._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.monadError._
 import cats.syntax.option._
 import cats.syntax.traverse._
+import fs2.Stream
 import org.http4s.{Uri, Request}
 import org.http4s.client.Client
 import org.http4s.scalaxml.{xml => xmlDecoder}
 import pathy.Path
 import pathy.Path.{DirName, FileName}
-import scala.xml
+import scala.xml.Elem
 import scalaz.{\/-, -\/}
 import shims._
 
 object children {
+  final case class ContinuationToken(value: String)
+
   // S3 provides a recursive listing (akin to `find` or
   // `dirtree`); we filter out children that aren't direct
   // children. We can only list 1000 keys, and need pagination
@@ -50,27 +54,112 @@ object children {
   // sends them in.
   //
   // FIXME: dir should be ADir and pathToDir should be deleted
+
+  @SuppressWarnings(Array("org.wartremover.warts.Recursion"))
   def apply[F[_]: Effect: Timer](
     client: Client[F],
     bucket: Uri,
     dir: APath,
-    sign: Request[F] => F[Request[F]]): F[Option[List[PathSegment]]] = {
-    val FO = Functor[F].compose[Option]
+    next: Option[ContinuationToken],
+    sign: Request[F] => F[Request[F]]): F[Option[Stream[F, PathSegment]]] = {
 
-    val filtered =
-      FO.map(descendants(client, bucket, dir, sign))(paths =>
-        paths.filter(path => Path.parentDir(path) === pathToDir(dir)))
+    def toPathSegment(s: Stream[F, APath]): Stream[F, PathSegment] =
+      s.filter(path => Path.parentDir(path) === pathToDir(dir))
+        .filter(path => path =!= dir)
+        .flatMap(p => Stream.emits(Path.peel(p).toList))
+        .map(_._2)
 
-    FO.map(filtered)(paths => paths.flatMap(Path.peel(_).toList).map(_._2))
+    val listing = listObjects(client, bucket, dir, next, sign) >>= (extractList(_))
+
+    listing >>= {
+      case Some((stream, None)) =>
+        (Some(toPathSegment(stream)): Option[Stream[F, PathSegment]]).pure[F]
+      case Some((stream, next0 @ Some(_))) => {
+        val rec = children.apply(client, bucket, dir, next0, sign)
+        val stream0 = toPathSegment(stream)
+
+        Functor[F].compose[Option].map(rec)(stream0 ++ _)
+      }
+      case None => none[Stream[F, PathSegment]].pure[F]
+    }
   }
 
-
-  // Lists all objects and prefixes in a bucket. This needs to be filtered
-  private def descendants[F[_]: Effect: Timer](
+  private def listObjects[F[_]: Effect: Timer](
     client: Client[F],
     bucket: Uri,
     dir: APath,
-    sign: Request[F] => F[Request[F]]): F[Option[List[APath]]] = {
+    next: Option[ContinuationToken],
+    sign: Request[F] => F[Request[F]]): F[Elem] =
+    sign(listingRequest(client, bucket, dir, next)) >>= (client.expect[Elem](_))
+
+  // Lists all objects and prefixes in a bucket. This needs to be filtered
+  private def extractList[F[_]: Sync](
+    doc: Elem): F[Option[(Stream[F, APath], Option[ContinuationToken])]] = {
+
+    val noContentMsg = "XML received from AWS API has no top-level <Contents>"
+    val noKeyCountMsg = "XML received from AWS API has no top-level <KeyCount>"
+    val noKeyMsg = "XML received from AWS API has no <Key> elements under <Contents>"
+    val noParseObjectMsg = "Failed to parse object path in S3 API response"
+
+    for {
+      // Send request to S3, parse the response as XML.
+      topLevelElem <- doc.pure[F]
+      // Grab child object names from the response.
+      response <- for {
+        contents <- Sync[F].suspend {
+          // Grab <Contents>.
+          Sync[F].catchNonFatal((topLevelElem \ "Contents"))
+            .adaptError {
+              case ex: Exception => new Exception(noContentMsg, ex)
+            }
+        }
+
+        keyCount <- Sync[F].suspend {
+          // Grab <KeyCount> to ensure this response is not empty.
+          Sync[F].catchNonFatal((topLevelElem \ "KeyCount").text.toInt)
+            .adaptError {
+              case ex: Exception => new Exception(noKeyCountMsg, ex)
+            }
+        }
+
+        // Grab all of the <Key> elements from <Contents>.
+        names <- contents.toList.traverse[F, String] { elem =>
+          Sync[F].catchNonFatal((elem \ "Key").text)
+            .adaptError {
+              case ex: Exception => new Exception(noKeyMsg, ex)
+            }
+        }
+
+        continuationToken <- Sync[F].attempt(
+          Sync[F].delay((topLevelElem \ "NextContinuationToken").text)).map(_.toOption)
+
+      } yield (names, keyCount, continuationToken)
+
+      (children, keyCount, ct) = response
+
+      // Convert S3 object names to paths.
+      childPaths <- children.traverse(s3NameToPath).fold(Sync[F].raiseError[List[APath]](new Exception(noParseObjectMsg)))(Sync[F].pure)
+      // Deal with some S3 idiosyncrasies.
+      // TODO: Pagination
+
+      result = if (keyCount === 0) {
+        none
+      } else {
+        // AWS includes the folder itself in the returned
+        // results, so we have to remove it.
+        // TODO: Report an error if there are duplicates. Remove duplicates.
+        (Stream.emits(childPaths).covary[F],
+          ct.filter(_.nonEmpty).map(ContinuationToken(_))).some
+      }
+    } yield result
+  }
+
+
+  private def listingRequest[F[_]: Sync](
+    client: Client[F],
+    bucket: Uri,
+    dir: APath,
+    ct: Option[ContinuationToken]): Request[F] = {
     // Converts a pathy Path to an S3 object prefix.
     val objectPrefix = aPathToObjectPrefix(dir)
 
@@ -80,66 +169,9 @@ object children {
     // We only add the `objectPrefix` if it's not empty;
     // the S3 API doesn't understand empty `prefix`.
     val listingQuery = (bucket / "") withQueryParam ("list-type", 2)
-    val queryUri =
-      objectPrefix.fold(listingQuery)(prefix =>
-        listingQuery
-          .withQueryParam("prefix", prefix))
+    val listingUri = objectPrefix.fold(listingQuery)(listingQuery.withQueryParam("prefix", _))
 
-    val request = Request[F](uri = queryUri)
-
-    for {
-      // Send request to S3, parse the response as XML.
-      signedRequest <- sign(request)
-
-      topLevelElem <- client.expect[xml.Elem](signedRequest)
-      // Grab child object names from the response.
-      response <- for {
-        contents <- Sync[F].suspend {
-          // Grab <Contents>.
-          Sync[F].catchNonFatal((topLevelElem \ "Contents"))
-            .adaptError {
-              case ex: Exception =>
-                new Exception("XML received from AWS API has no top-level <Contents>", ex)
-            }
-        }
-
-        keyCount <- Sync[F].suspend {
-          // Grab <KeyCount> to ensure this response is not empty.
-          Sync[F].catchNonFatal((topLevelElem \ "KeyCount").text.toInt)
-            .adaptError {
-              case ex: Exception =>
-                new Exception("XML received from AWS API has no top-level <KeyCount>", ex)
-            }
-        }
-
-        // Grab all of the <Key> elements from <Contents>.
-        names <- contents.toList.traverse[F, String] { elem =>
-          Sync[F].catchNonFatal((elem \ "Key").text)
-            .adaptError {
-              case ex: Exception =>
-                new Exception("XML received from AWS API has no <Key> elements under <Contents>", ex)
-            }
-        }
-      } yield (names, keyCount)
-
-      (children, keyCount) = response
-
-      // Convert S3 object names to paths.
-      childPaths <- children.traverse(s3NameToPath)
-      .fold(Sync[F].raiseError[List[APath]](new Exception(s"Failed to parse object path in S3 API response")))(Sync[F].pure)
-
-      // Deal with some S3 idiosyncrasies.
-      // TODO: Pagination
-
-      result = if (keyCount === 0) {
-        None
-      } else {
-        // AWS includes the folder itself in the returned
-        // results, so we have to remove it.
-        // TODO: Report an error if there are duplicates. Remove duplicates.
-        Some(childPaths.filter(path => path =!= dir))
-      }
-    } yield result
+    Request[F](uri = listingUri)
   }
 
   private def aPathToObjectPrefix(apath: APath): Option[String] = {
