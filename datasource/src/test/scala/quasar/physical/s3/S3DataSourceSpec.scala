@@ -70,7 +70,7 @@ class S3DataSourceSpec extends ResourceDiscoverySpec[IO, Stream[IO, ?]] {
         .map(resources => {
           resources.length must_== 4
           resources(0) must_== (ResourceName("dir1") -> ResourcePathType.resourcePrefix)
-          resources(1) must_== (ResourceName("extraSmallZips.data")-> ResourcePathType.resource)
+          resources(1) must_== (ResourceName("extraSmallZips.data") -> ResourcePathType.resource)
           resources(2) must_== (ResourceName("prefix3") -> ResourcePathType.resourcePrefix)
           resources(3) must_== (ResourceName("testData") -> ResourcePathType.resourcePrefix)
         })

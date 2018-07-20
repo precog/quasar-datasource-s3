@@ -16,9 +16,16 @@
 
 package quasar.physical.s3
 
+import scala.Predef._
 import quasar.api.datasource.DatasourceType
-
 import eu.timepit.refined.auto._
+
+sealed trait S3Error
+
+object S3Error {
+  final case object NotFound extends S3Error
+  final case class UnexpectedResponse(msg: String) extends S3Error
+}
 
 sealed trait S3JsonParsing
 
