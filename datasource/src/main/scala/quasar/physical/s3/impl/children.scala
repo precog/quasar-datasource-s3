@@ -62,20 +62,19 @@ object children {
     client: Client[F],
     bucket: Uri,
     dir: APath,
-    next: Option[ContinuationToken],
     sign: Request[F] => F[Request[F]])
       : F[Option[Stream[F, PathSegment]]] = {
     val msg = "Unexpected failure when streaming a multi-page response for ListBuckets"
     val stream0 =
-      handleS3(stream(client, bucket, dir, next, sign)) map (results =>
+      handleS3(fetchResults(client, bucket, dir, None, sign)) map (results =>
         Stream.iterateEval(results) {
           case (_, next0) =>
-            handleS3(stream(client, bucket, dir, next0, sign))
+            handleS3(fetchResults(client, bucket, dir, next0, sign))
               .getOrElseF(Sync[F].raiseError(new Exception(msg)))
         })
 
     // We use takeThrough and not takeWhile since the last page of a response
-    // does not have include a `continuation-token`
+    // does not include a `continuation-token`
     stream0.map(s =>
       s.takeThrough { case (_, ct) => ct.isDefined }
         .flatMap { case (l, _) => Stream.emits(l) })
@@ -86,13 +85,13 @@ object children {
 
   // converts non-recoverable errors to runtime errors
   private def handleS3[F[_]: Sync, A](e: EitherT[F, S3Error, A]): OptionT[F, A] =
-    OptionT(e.value >>= {
+    OptionT(e.value.flatMap {
       case Left(S3Error.UnexpectedResponse(msg)) => Sync[F].raiseError(new Exception(msg))
       case Left(S3Error.NotFound) => none.pure[F]
       case Right(a) => a.some.pure[F]
     })
 
-  private def stream[F[_]: Effect: Timer](
+  private def fetchResults[F[_]: Effect: Timer](
     client: Client[F],
     bucket: Uri,
     dir: APath,
@@ -114,7 +113,7 @@ object children {
     next: Option[ContinuationToken],
     sign: Request[F] => F[Request[F]])
       : F[Elem] =
-    sign(listingRequest(client, bucket, dir, next)) >>= (client.expect[Elem](_))
+    sign(listingRequest(client, bucket, dir, next)).flatMap(client.expect[Elem](_))
 
   private def listingRequest[F[_]](
     client: Client[F],

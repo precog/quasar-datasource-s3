@@ -70,7 +70,7 @@ final class S3DataSource[F[_]: Effect: Timer, G[_]: Async](
     }
 
   def children(path: ResourcePath): F[CommonError \/ Stream[G, (ResourceName, ResourcePathType)]] =
-    impl.children(client, config.bucket, dropEmpty(path.toPath), None, S3DataSource.signRequest(config)) map {
+    impl.children(client, config.bucket, dropEmpty(path.toPath), S3DataSource.signRequest(config)) map {
       case None =>
         ResourceError.pathNotFound(path).left[Stream[G, (ResourceName, ResourcePathType)]]
       case Some(paths) =>
@@ -118,7 +118,7 @@ object S3DataSource {
         req => {
           // Requests that require signing also require `host` to always be present
           val req0 = req.uri.host match {
-            case Some(host) => req.withHeaders(req.headers ++ Headers(Header("host", host.value)))
+            case Some(host) => req.withHeaders(Headers(Header("host", host.value)))
             case None => req
           }
 
