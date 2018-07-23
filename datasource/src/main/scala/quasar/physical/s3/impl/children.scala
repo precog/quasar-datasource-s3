@@ -24,7 +24,7 @@ import scala.util.Either
 import quasar.contrib.pathy._
 import quasar.physical.s3.S3Error
 
-import cats.Functor
+import cats.data.{EitherT, OptionT}
 import cats.effect.{Sync, Timer, Effect}
 import cats.instances.either._
 import cats.instances.int._
@@ -58,40 +58,52 @@ object children {
   // sends them in.
   //
   // FIXME: dir should be ADir and pathToDir should be deleted
-
-  @SuppressWarnings(Array("org.wartremover.warts.Recursion"))
   def apply[F[_]: Effect: Timer](
     client: Client[F],
     bucket: Uri,
     dir: APath,
     next: Option[ContinuationToken],
-    sign: Request[F] => F[Request[F]]): F[Option[Stream[F, PathSegment]]] = {
+    sign: Request[F] => F[Request[F]])
+      : F[Option[Stream[F, PathSegment]]] = {
+    val msg = "Unexpected failure when streaming a multi-page response for ListBuckets"
+    val stream0 =
+      handleS3(stream(client, bucket, dir, next, sign)) map (results =>
+        Stream.iterateEval(results) {
+          case (_, next0) =>
+            handleS3(stream(client, bucket, dir, next0, sign))
+              .getOrElseF(Sync[F].raiseError(new Exception(msg)))
+        })
 
-    def toPathSegment(s: Stream[F, APath]): Stream[F, PathSegment] =
-      s.filter(path => Path.parentDir(path) === pathToDir(dir))
-        .filter(path => path =!= dir)
-        .flatMap(p => Stream.emits(Path.peel(p).toList))
-        .map(_._2)
-
-    val listingDoc = listObjects(client, bucket, dir, next, sign)
-    val listing = listingDoc map (extractList(_))
-
-    listing >>= {
-      case Right((stream0, None)) => {
-        val stream = Stream.emits(stream0)
-
-        (Some(toPathSegment(stream)): Option[Stream[F, PathSegment]]).pure[F]
-      }
-      case Right((stream0, next0 @ Some(_))) => {
-        val rec = children.apply(client, bucket, dir, next0, sign)
-        val stream = Stream.emits(stream0)
-
-        Functor[F].compose[Option].map(rec)(toPathSegment(stream) ++ _)
-      }
-      case Left(S3Error.NotFound) => none[Stream[F, PathSegment]].pure[F]
-      case Left(S3Error.UnexpectedResponse(msg)) => Sync[F].raiseError(new Exception(msg))
-    }
+    stream0.map(s =>
+      s.takeThrough { case (_, ct) => ct.isDefined }
+        .flatMap { case (l, _) => Stream.emits(l) })
+      .map(toPathSegment(_, dir))
+      .value
   }
+  ///
+
+  // converts non-recoverable errors to runtime errors
+  private def handleS3[F[_]: Effect: Timer, A](e: EitherT[F, S3Error, A]): OptionT[F, A] =
+    OptionT(e.value >>= {
+      case Left(S3Error.UnexpectedResponse(msg)) => Sync[F].raiseError(new Exception(msg))
+      case Left(S3Error.NotFound) => none.pure[F]
+      case Right(a) => a.some.pure[F]
+    })
+
+  private def stream[F[_]: Effect: Timer](
+    client: Client[F],
+    bucket: Uri,
+    dir: APath,
+    next: Option[ContinuationToken],
+    sign: Request[F] => F[Request[F]])
+      : EitherT[F, S3Error, (List[APath], Option[ContinuationToken])] =
+    EitherT(listObjects(client, bucket, dir, next, sign).map(extractList(_)))
+
+  private def toPathSegment[F[_]](s: Stream[F, APath], dir: APath): Stream[F, PathSegment] =
+    s.filter(path => Path.parentDir(path) === pathToDir(dir))
+      .filter(path => path =!= dir)
+      .flatMap(p => Stream.emits(Path.peel(p).toList))
+      .map(_._2)
 
   private def listObjects[F[_]: Effect: Timer](
     client: Client[F],
@@ -99,9 +111,10 @@ object children {
     dir: APath,
     next: Option[ContinuationToken],
     sign: Request[F] => F[Request[F]])
-      : F[Elem] = sign(listingRequest(client, bucket, dir, next)) >>= (client.expect[Elem](_))
+      : F[Elem] =
+    sign(listingRequest(client, bucket, dir, next)) >>= (client.expect[Elem](_))
 
-  private def listingRequest[F[_]: Sync](
+  private def listingRequest[F[_]](
     client: Client[F],
     bucket: Uri,
     dir: APath,
