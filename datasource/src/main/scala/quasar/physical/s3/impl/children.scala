@@ -74,6 +74,8 @@ object children {
               .getOrElseF(Sync[F].raiseError(new Exception(msg)))
         })
 
+    // We use takeThrough and not takeWhile since the last page of a response
+    // does not have include a `continuation-token`
     stream0.map(s =>
       s.takeThrough { case (_, ct) => ct.isDefined }
         .flatMap { case (l, _) => Stream.emits(l) })
@@ -83,7 +85,7 @@ object children {
   ///
 
   // converts non-recoverable errors to runtime errors
-  private def handleS3[F[_]: Effect: Timer, A](e: EitherT[F, S3Error, A]): OptionT[F, A] =
+  private def handleS3[F[_]: Sync, A](e: EitherT[F, S3Error, A]): OptionT[F, A] =
     OptionT(e.value >>= {
       case Left(S3Error.UnexpectedResponse(msg)) => Sync[F].raiseError(new Exception(msg))
       case Left(S3Error.NotFound) => none.pure[F]
