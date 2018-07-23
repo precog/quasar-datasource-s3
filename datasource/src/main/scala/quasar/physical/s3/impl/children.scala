@@ -62,14 +62,15 @@ object children {
     client: Client[F],
     bucket: Uri,
     dir: APath,
+    params: ExtraParams,
     sign: Request[F] => F[Request[F]])
       : F[Option[Stream[F, PathSegment]]] = {
     val msg = "Unexpected failure when streaming a multi-page response for ListBuckets"
     val stream0 =
-      handleS3(fetchResults(client, bucket, dir, None, sign)) map (results =>
+      handleS3(fetchResults(client, bucket, dir, None, params, sign)) map (results =>
         Stream.iterateEval(results) {
           case (_, next0) =>
-            handleS3(fetchResults(client, bucket, dir, next0, sign))
+            handleS3(fetchResults(client, bucket, dir, next0, params, sign))
               .getOrElseF(Sync[F].raiseError(new Exception(msg)))
         })
 
@@ -82,6 +83,7 @@ object children {
       .value
   }
   ///
+  type ExtraParams = Map[String, String]
 
   // converts non-recoverable errors to runtime errors
   private def handleS3[F[_]: Sync, A](e: EitherT[F, S3Error, A]): OptionT[F, A] =
@@ -96,9 +98,10 @@ object children {
     bucket: Uri,
     dir: APath,
     next: Option[ContinuationToken],
+    params: ExtraParams,
     sign: Request[F] => F[Request[F]])
       : EitherT[F, S3Error, (List[APath], Option[ContinuationToken])] =
-    EitherT(listObjects(client, bucket, dir, next, sign).map(extractList(_)))
+    EitherT(listObjects(client, bucket, dir, next, params, sign).map(extractList(_)))
 
   private def toPathSegment[F[_]](s: Stream[F, APath], dir: APath): Stream[F, PathSegment] =
     s.filter(path => Path.parentDir(path) === pathToDir(dir))
@@ -111,15 +114,17 @@ object children {
     bucket: Uri,
     dir: APath,
     next: Option[ContinuationToken],
+    params: ExtraParams,
     sign: Request[F] => F[Request[F]])
       : F[Elem] =
-    sign(listingRequest(client, bucket, dir, next)).flatMap(client.expect[Elem](_))
+    sign(listingRequest(client, bucket, dir, next, params)).flatMap(client.expect[Elem](_))
 
   private def listingRequest[F[_]](
     client: Client[F],
     bucket: Uri,
     dir: APath,
-    ct: Option[ContinuationToken]): Request[F] = {
+    ct: Option[ContinuationToken],
+    extraParams: ExtraParams): Request[F] = {
     // Converts a pathy Path to an S3 object prefix.
     val objectPrefix = aPathToObjectPrefix(dir)
 
@@ -134,7 +139,7 @@ object children {
     val prefix = objectPrefix.map(("prefix", _))
     val ct0 = ct.map(_.value).map(("continuation-token", _))
 
-    val params = List(listType, prefix, ct0).unite
+    val params = List(listType, prefix, ct0).unite ++ extraParams.toList
 
     val queryUri = params.foldLeft(listingQuery) {
       case (uri0, (param, value)) => uri0.withQueryParam(param, value)
