@@ -16,11 +16,12 @@
 
 package quasar.physical.s3
 
+import slamdata.Predef._
+
 import quasar.api.ResourceDiscoverySpec
 import quasar.api.{ResourceName, ResourcePath, ResourcePathType}
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import slamdata.Predef._
 
 import cats.effect.IO
 import fs2.Stream
@@ -70,7 +71,7 @@ class S3DataSourceSpec extends ResourceDiscoverySpec[IO, Stream[IO, ?]] {
         .map(resources => {
           resources.length must_== 4
           resources(0) must_== (ResourceName("dir1") -> ResourcePathType.resourcePrefix)
-          resources(1) must_== (ResourceName("extraSmallZips.data")-> ResourcePathType.resource)
+          resources(1) must_== (ResourceName("extraSmallZips.data") -> ResourcePathType.resource)
           resources(2) must_== (ResourceName("prefix3") -> ResourcePathType.resourcePrefix)
           resources(3) must_== (ResourceName("testData") -> ResourcePathType.resourcePrefix)
         })
@@ -109,14 +110,14 @@ class S3DataSourceSpec extends ResourceDiscoverySpec[IO, Stream[IO, ?]] {
     S3Config(
       Uri.uri("https://s3.amazonaws.com/slamdata-public-test"),
       S3JsonParsing.LineDelimited,
-      None))(global)
+      None))
 
   val discovery = new S3DataSource[IO, IO](
     Http1Client[IO]().unsafeRunSync,
     S3Config(
       Uri.uri("https://s3.amazonaws.com/slamdata-public-test"),
       S3JsonParsing.JsonArray,
-      None))(global)
+      None))
 
   val nonExistentPath =
     ResourcePath.root() / ResourceName("does") / ResourceName("not") / ResourceName("exist")

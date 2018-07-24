@@ -16,27 +16,37 @@
 
 package quasar.physical.s3.impl
 
-import quasar.contrib.pathy._
 
 import slamdata.Predef._
 
-import cats.Functor
+import scala.util.Either
+
+import quasar.contrib.pathy._
+import quasar.physical.s3.S3Error
+
+import cats.data.{EitherT, OptionT}
 import cats.effect.{Sync, Timer, Effect}
+import cats.instances.either._
 import cats.instances.int._
 import cats.instances.list._
 import cats.instances.option._
+import cats.instances.tuple._
+import cats.syntax.alternative._
+import cats.syntax.applicative._
+import cats.syntax.bifunctor._
+import cats.syntax.either._
 import cats.syntax.eq._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
-import cats.syntax.monadError._
 import cats.syntax.option._
 import cats.syntax.traverse._
+import fs2.Stream
 import org.http4s.{Uri, Request}
 import org.http4s.client.Client
 import org.http4s.scalaxml.{xml => xmlDecoder}
 import pathy.Path
 import pathy.Path.{DirName, FileName}
-import scala.xml
+import scala.xml.Elem
 import scalaz.{\/-, -\/}
 import shims._
 
@@ -54,23 +64,66 @@ object children {
     client: Client[F],
     bucket: Uri,
     dir: APath,
-    sign: Request[F] => F[Request[F]]): F[Option[List[PathSegment]]] = {
-    val FO = Functor[F].compose[Option]
+    sign: Request[F] => F[Request[F]])
+      : F[Option[Stream[F, PathSegment]]] = {
+    val msg = "Unexpected failure when streaming a multi-page response for ListBuckets"
+    val stream0 =
+      handleS3(fetchResults(client, bucket, dir, None, sign)) map (results =>
+        Stream.iterateEval(results) {
+          case (_, next0) =>
+            handleS3(fetchResults(client, bucket, dir, next0, sign))
+              .getOrElseF(Sync[F].raiseError(new Exception(msg)))
+        })
 
-    val filtered =
-      FO.map(descendants(client, bucket, dir, sign))(paths =>
-        paths.filter(path => Path.parentDir(path) === pathToDir(dir)))
-
-    FO.map(filtered)(paths => paths.flatMap(Path.peel(_).toList).map(_._2))
+    // We use takeThrough and not takeWhile since the last page of a response
+    // does not include a `continuation-token`
+    stream0.map(_.takeThrough(_._2.isDefined).flatMap(_._1))
+      .map(toPathSegment(_, dir))
+      .value
   }
 
+  ///
 
-  // Lists all objects and prefixes in a bucket. This needs to be filtered
-  private def descendants[F[_]: Effect: Timer](
+  // converts non-recoverable errors to runtime errors
+  private def handleS3[F[_]: Sync, A](e: EitherT[F, S3Error, A]): OptionT[F, A] =
+    OptionT(e.value.flatMap {
+      case Left(S3Error.UnexpectedResponse(msg)) => Sync[F].raiseError(new Exception(msg))
+      case Left(S3Error.NotFound) => none.pure[F]
+      case Right(a) => a.some.pure[F]
+    })
+
+  // FIXME parse the results as they arrive using an XML streaming parser, instead of paging
+  // one response at a time
+  private def fetchResults[F[_]: Effect: Timer](
     client: Client[F],
     bucket: Uri,
     dir: APath,
-    sign: Request[F] => F[Request[F]]): F[Option[List[APath]]] = {
+    next: Option[ContinuationToken],
+    sign: Request[F] => F[Request[F]])
+      : EitherT[F, S3Error, (Stream[F, APath], Option[ContinuationToken])] =
+    EitherT(listObjects(client, bucket, dir, next, sign)
+      .map(extractList(_))).map(_.leftMap(Stream.emits(_)))
+
+  private def toPathSegment[F[_]](s: Stream[F, APath], dir: APath): Stream[F, PathSegment] =
+    s.filter(path => Path.parentDir(path) === pathToDir(dir))
+      .filter(path => path =!= dir)
+      .flatMap(p => Stream.emits(Path.peel(p).toList))
+      .map(_._2)
+
+  private def listObjects[F[_]: Effect: Timer](
+    client: Client[F],
+    bucket: Uri,
+    dir: APath,
+    next: Option[ContinuationToken],
+    sign: Request[F] => F[Request[F]])
+      : F[Elem] =
+    sign(listingRequest(client, bucket, dir, next)).flatMap(client.expect[Elem](_))
+
+  private def listingRequest[F[_]](
+    client: Client[F],
+    bucket: Uri,
+    dir: APath,
+    ct: Option[ContinuationToken]): Request[F] = {
     // Converts a pathy Path to an S3 object prefix.
     val objectPrefix = aPathToObjectPrefix(dir)
 
@@ -79,67 +132,51 @@ object children {
     // `list-type=2` asks for the new version of the list api.
     // We only add the `objectPrefix` if it's not empty;
     // the S3 API doesn't understand empty `prefix`.
-    val listingQuery = (bucket / "") withQueryParam ("list-type", 2)
-    val queryUri =
-      objectPrefix.fold(listingQuery)(prefix =>
-        listingQuery
-          .withQueryParam("prefix", prefix))
+    val listingQuery = (bucket / "")
 
-    val request = Request[F](uri = queryUri)
+    val listType = ("list-type", "2").some
+    val prefix = objectPrefix.map(("prefix", _))
+    val ct0 = ct.map(_.value).map(("continuation-token", _))
 
-    for {
-      // Send request to S3, parse the response as XML.
-      signedRequest <- sign(request)
+    val params = List(listType, prefix, ct0).unite
 
-      topLevelElem <- client.expect[xml.Elem](signedRequest)
-      // Grab child object names from the response.
-      response <- for {
-        contents <- Sync[F].suspend {
-          // Grab <Contents>.
-          Sync[F].catchNonFatal((topLevelElem \ "Contents"))
-            .adaptError {
-              case ex: Exception =>
-                new Exception("XML received from AWS API has no top-level <Contents>", ex)
-            }
-        }
+    val queryUri = params.foldLeft(listingQuery) {
+      case (uri0, (param, value)) => uri0.withQueryParam(param, value)
+    }
 
-        keyCount <- Sync[F].suspend {
-          // Grab <KeyCount> to ensure this response is not empty.
-          Sync[F].catchNonFatal((topLevelElem \ "KeyCount").text.toInt)
-            .adaptError {
-              case ex: Exception =>
-                new Exception("XML received from AWS API has no top-level <KeyCount>", ex)
-            }
-        }
+    Request[F](uri = queryUri)
+  }
 
-        // Grab all of the <Key> elements from <Contents>.
-        names <- contents.toList.traverse[F, String] { elem =>
-          Sync[F].catchNonFatal((elem \ "Key").text)
-            .adaptError {
-              case ex: Exception =>
-                new Exception("XML received from AWS API has no <Key> elements under <Contents>", ex)
-            }
-        }
-      } yield (names, keyCount)
+  // Lists all objects and prefixes from a ListObjects request. This needs to be filtered
+  private def extractList(doc: Elem): Either[S3Error, (List[APath], Option[ContinuationToken])] = {
+    val noContentMsg = S3Error.UnexpectedResponse("XML received from AWS API has no top-level <Contents>")
+    val noKeyCountMsg = S3Error.UnexpectedResponse("XML received from AWS API has no top-level <KeyCount>")
+    val noKeyMsg = S3Error.UnexpectedResponse("XML received from AWS API has no <Key> elements under <Contents>")
+    val noParseObjectMsg = S3Error.UnexpectedResponse("Failed to parse object path in S3 API response")
 
-      (children, keyCount) = response
+    val contents =
+      Either.catchNonFatal(doc \ "Contents").leftMap(_ => noContentMsg)
+    val keyCount =
+      Either.catchNonFatal((doc \ "KeyCount").text.toInt).leftMap(_ => noKeyCountMsg)
 
-      // Convert S3 object names to paths.
-      childPaths <- children.traverse(s3NameToPath)
-      .fold(Sync[F].raiseError[List[APath]](new Exception(s"Failed to parse object path in S3 API response")))(Sync[F].pure)
+    val continuationToken =
+      Either.catchNonFatal((doc \ "NextContinuationToken").text)
+        .toOption.filter(_.nonEmpty).map(ContinuationToken(_))
 
-      // Deal with some S3 idiosyncrasies.
-      // TODO: Pagination
+    val children: Either[S3Error, List[String]] =
+      contents
+        .map(_.toList)
+        .flatMap(_.traverse[Either[S3Error, ?], String](elem =>
+          Either.catchNonFatal((elem \ "Key").text).leftMap(_ => noKeyMsg)))
 
-      result = if (keyCount === 0) {
-        None
-      } else {
-        // AWS includes the folder itself in the returned
-        // results, so we have to remove it.
-        // TODO: Report an error if there are duplicates. Remove duplicates.
-        Some(childPaths.filter(path => path =!= dir))
-      }
-    } yield result
+    val childPaths =
+      children
+        .flatMap(_.traverse[Either[S3Error, ?], APath](pth =>
+          Either.fromOption(s3NameToPath(pth), noParseObjectMsg)))
+
+    keyCount.flatMap(kc =>
+      if (kc === 0) S3Error.NotFound.asLeft
+      else childPaths.map((_, continuationToken)))
   }
 
   private def aPathToObjectPrefix(apath: APath): Option[String] = {
@@ -179,4 +216,7 @@ object children {
       case None if Path.depth(path) === 0 => Path.rootDir.some
       case _ => none
     }
+
+  private final case class ContinuationToken(value: String)
+
 }
