@@ -36,14 +36,14 @@ final class SecureS3DataSourceSpec extends S3DataSourceSpec {
     S3Config(
       Uri.uri("https://s3.amazonaws.com/slamdata-private-test"),
       S3JsonParsing.LineDelimited,
-      Some(readCredentials.unsafeRunSync)), Map.empty)
+      Some(readCredentials.unsafeRunSync)))
 
   override val discovery = new S3DataSource[IO, IO](
     Http1Client[IO]().unsafeRunSync,
     S3Config(
       Uri.uri("https://s3.amazonaws.com/slamdata-private-test"),
       S3JsonParsing.JsonArray,
-      Some(readCredentials.unsafeRunSync)), Map.empty)
+      Some(readCredentials.unsafeRunSync)))
 
   // FIXME: close the file once we update to cats-effect 1.0.0 and
   // Bracket is available

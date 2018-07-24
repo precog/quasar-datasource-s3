@@ -110,14 +110,14 @@ class S3DataSourceSpec extends ResourceDiscoverySpec[IO, Stream[IO, ?]] {
     S3Config(
       Uri.uri("https://s3.amazonaws.com/slamdata-public-test"),
       S3JsonParsing.LineDelimited,
-      None), Map.empty)
+      None))
 
   val discovery = new S3DataSource[IO, IO](
     Http1Client[IO]().unsafeRunSync,
     S3Config(
       Uri.uri("https://s3.amazonaws.com/slamdata-public-test"),
       S3JsonParsing.JsonArray,
-      None), Map.empty)
+      None))
 
   val nonExistentPath =
     ResourcePath.root() / ResourceName("does") / ResourceName("not") / ResourceName("exist")

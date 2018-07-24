@@ -46,8 +46,7 @@ import shims._
 
 final class S3DataSource[F[_]: Effect: Timer, G[_]: Async](
   client: Client[F],
-  config: S3Config,
-  extraParams: Map[String, String])
+  config: S3Config)
     extends LightweightDatasource[F, Stream[G, ?], Stream[G, Data]] {
   def kind: DatasourceType = s3.datasourceKind
 
@@ -73,7 +72,6 @@ final class S3DataSource[F[_]: Effect: Timer, G[_]: Async](
       client,
       config.bucket,
       dropEmpty(path.toPath),
-      extraParams,
       S3DataSource.signRequest(config)) map {
       case None =>
         ResourceError.pathNotFound(path).left[Stream[G, (ResourceName, ResourcePathType)]]
