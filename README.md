@@ -15,12 +15,18 @@ in `.targets/datasource/scala-2.12/quasar-s3-<version>-explode.tar.gz`
 
 ## Configuration
 
-You can create a new S3 datasource after you've loaded the plugin into
+You can create a new S3 datasource after you've loaded this plugin into
 Quasar. Refer to the previous section for instructions on how to do
-that. In order to create a datasource, you will need to send a PUT
-request to `/datasource/<your datasource name>` including a JSON
-document specifiying the datasource's configuration. An example of a
-JSON configuration to create a datasource that parses line-delimited JSON:
+that. In order to create a datasource, you will need to send a POST
+request to `/datasource` including a JSON
+document specifiying the datasource's configuration. The format of the
+JSON document can be found in [`slamdata-backend`'s
+documentation.](https://github.com/slamdata/slamdata-backend#applicationvndslamdatadatasource). 
+
+The connector-specific configuration needs to specify at least a
+bucket URI and the JSON parsing to use when decoding JSON files stored
+in S3. An example of a JSON configuration to create a datasource that
+parses line-delimited JSON:
 
 ```json
 {
@@ -29,7 +35,7 @@ JSON configuration to create a datasource that parses line-delimited JSON:
 }
 ```
 
-As another example, this is the JSON configuration to parse array
+As another example, this is a JSON configuration to parse array
 JSON:
 
 ```json
@@ -39,12 +45,10 @@ JSON:
 }
 ```
 
-You also need to specify a `Content-Type` header with
-information regarding this datasource. For example, to use version 1
-of this datasource you may specify:
+Along with the request, you also need to specify a `Content-Type` header: 
 
 ```
-Content-Type: application/vnd.slamdata.datasource.s3; version="1"
+Content-Type: application/vnd.slamdata.datasource"
 ```
 
 ### Secure buckets
