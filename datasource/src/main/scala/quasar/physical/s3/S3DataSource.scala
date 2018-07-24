@@ -26,7 +26,6 @@ import quasar.connector.datasource.LightweightDatasource
 import quasar.contrib.cats.effect._
 import quasar.contrib.pathy.APath
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.SECONDS
 import slamdata.Predef.{Stream => _, _}
 
@@ -48,7 +47,7 @@ import shims._
 final class S3DataSource[F[_]: Effect: Timer, G[_]: Async](
   client: Client[F],
   config: S3Config,
-  extraParams: Map[String, String])(ec: ExecutionContext)
+  extraParams: Map[String, String])
     extends LightweightDatasource[F, Stream[G, ?], Stream[G, Data]] {
   def kind: DatasourceType = s3.datasourceKind
 

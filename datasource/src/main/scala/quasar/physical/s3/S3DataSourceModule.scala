@@ -24,8 +24,6 @@ import quasar.api.datasource.DatasourceType
 import quasar.connector.Datasource
 import quasar.connector.LightweightDatasourceModule
 
-import scala.concurrent.ExecutionContext.Implicits.global
-
 import argonaut.Json
 import cats.effect.{Timer, ConcurrentEffect}
 import fs2.Stream
@@ -48,7 +46,7 @@ object S3DataSourceModule extends LightweightDatasourceModule {
       case Right(s3Config) => {
         Http1Client[F]() map { client =>
           val ds: Datasource[F, Stream[G, ?], ResourcePath, Stream[G, Data]] =
-            new S3DataSource[F, G](client, s3Config, Map.empty)(global)
+            new S3DataSource[F, G](client, s3Config, Map.empty)
 
           ds.right[InitializationError[Json]]
         }
