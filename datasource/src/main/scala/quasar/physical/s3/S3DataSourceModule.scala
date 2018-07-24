@@ -17,12 +17,14 @@
 package quasar.physical.s3
 
 
-import quasar.Data
+import quasar.common.data.Data
+import quasar.common.resource.MonadResourceErr
+import quasar.common.resource.ResourcePath
 import quasar.api.datasource.DatasourceError.{InitializationError, MalformedConfiguration}
-import quasar.api.ResourcePath
 import quasar.api.datasource.DatasourceType
 import quasar.connector.Datasource
 import quasar.connector.LightweightDatasourceModule
+import quasar.Disposable
 
 import argonaut.Json
 import cats.effect.{Timer, ConcurrentEffect}
@@ -37,24 +39,23 @@ import shims._
 object S3DataSourceModule extends LightweightDatasourceModule {
   def kind: DatasourceType = s3.datasourceKind
 
-  def lightweightDatasource[
-      F[_]: ConcurrentEffect: Timer,
-      G[_]: ConcurrentEffect: Timer](
-      config: Json)
-      : F[InitializationError[Json] \/ Datasource[F, Stream[G, ?], ResourcePath, Stream[G, Data]]] = {
+  def lightweightDatasource[F[_]: ConcurrentEffect: MonadResourceErr: Timer](config: Json)
+      : F[InitializationError[Json] \/ Disposable[F, Datasource[F, Stream[F, ?], ResourcePath, Stream[F, Data]]]] = {
     config.as[S3Config].result match {
       case Right(s3Config) => {
         Http1Client[F]() map { client =>
-          val ds: Datasource[F, Stream[G, ?], ResourcePath, Stream[G, Data]] =
-            new S3DataSource[F, G](client, s3Config)
+          val ds: Datasource[F, Stream[F, ?], ResourcePath, Stream[F, Data]] =
+            new S3DataSource[F](client, s3Config)
 
-          ds.right[InitializationError[Json]]
+          val disposable = Disposable(ds, client.shutdown)
+
+          disposable.right[InitializationError[Json]]
         }
       }
 
       case Left((msg, _)) =>
         (MalformedConfiguration(kind, config, msg): InitializationError[Json])
-          .left[Datasource[F, Stream[G, ?], ResourcePath, Stream[G, Data]]].point[F]
+          .left[Disposable[F, Datasource[F, Stream[F, ?], ResourcePath, Stream[F, Data]]]].point[F]
     }
   }
 }
