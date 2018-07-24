@@ -141,6 +141,8 @@ object children {
 
     val params = List(listType, prefix, ct0).unite ++ extraParams.toList
 
+    println(ct)
+
     val queryUri = params.foldLeft(listingQuery) {
       case (uri0, (param, value)) => uri0.withQueryParam(param, value)
     }
