@@ -20,25 +20,33 @@ import slamdata.Predef._
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
+import quasar.api.{ResourceName, ResourcePath, ResourcePathType}
+
 import cats.effect.IO
 import org.http4s.Uri
 import org.http4s.client.blaze.Http1Client
+import org.specs2.mutable.Specification
 
-final class PagedS3DataSourceSpec extends S3DataSourceSpec {
+final class PagedS3DataSourceSpec extends Specification {
+  "lists all resources at the root of the bucket, one per request" >> {
+    discovery.children(ResourcePath.root()).flatMap { list =>
+      list.map(_.compile.toList).getOrElse(IO.raiseError(new Exception("Could not list children under the root")))
+        .map(resources => {
+          resources.length must_== 4
+          resources(0) must_== (ResourceName("dir1") -> ResourcePathType.resourcePrefix)
+          resources(1) must_== (ResourceName("extraSmallZips.data") -> ResourcePathType.resource)
+          resources(2) must_== (ResourceName("prefix3") -> ResourcePathType.resourcePrefix)
+          resources(3) must_== (ResourceName("testData") -> ResourcePathType.resourcePrefix)
+        })
+    }.unsafeRunSync
+  }
+
   // Force S3 to return a single element per page in ListBuckets,
   // to ensure pagination works correctly
-
-  override val discoveryLD = new S3DataSource[IO, IO](
+  val discovery = new S3DataSource[IO, IO](
     Http1Client[IO]().unsafeRunSync,
     S3Config(
       Uri.uri("https://s3.amazonaws.com/slamdata-public-test"),
       S3JsonParsing.LineDelimited,
-      None), Map("max-keys" -> "1"))
-
-  override val discovery = new S3DataSource[IO, IO](
-    Http1Client[IO]().unsafeRunSync,
-    S3Config(
-      Uri.uri("https://s3.amazonaws.com/slamdata-public-test"),
-      S3JsonParsing.JsonArray,
       None), Map("max-keys" -> "1"))
 }
