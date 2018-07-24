@@ -30,8 +30,10 @@ import cats.instances.either._
 import cats.instances.int._
 import cats.instances.list._
 import cats.instances.option._
+import cats.instances.tuple._
 import cats.syntax.alternative._
 import cats.syntax.applicative._
+import cats.syntax.bifunctor._
 import cats.syntax.either._
 import cats.syntax.eq._
 import cats.syntax.flatMap._
@@ -75,9 +77,7 @@ object children {
 
     // We use takeThrough and not takeWhile since the last page of a response
     // does not include a `continuation-token`
-    stream0.map(s =>
-      s.takeThrough { case (_, ct) => ct.isDefined }
-        .flatMap { case (l, _) => Stream.emits(l) })
+    stream0.map(_.takeThrough(_._2.isDefined).flatMap(_._1))
       .map(toPathSegment(_, dir))
       .value
   }
@@ -92,14 +92,17 @@ object children {
       case Right(a) => a.some.pure[F]
     })
 
+  // FIXME parse the results as they arrive using an XML streaming parser, instead of paging
+  // one response at a time
   private def fetchResults[F[_]: Effect: Timer](
     client: Client[F],
     bucket: Uri,
     dir: APath,
     next: Option[ContinuationToken],
     sign: Request[F] => F[Request[F]])
-      : EitherT[F, S3Error, (List[APath], Option[ContinuationToken])] =
-    EitherT(listObjects(client, bucket, dir, next, sign).map(extractList(_)))
+      : EitherT[F, S3Error, (Stream[F, APath], Option[ContinuationToken])] =
+    EitherT(listObjects(client, bucket, dir, next, sign)
+      .map(extractList(_))).map(_.leftMap(Stream.emits(_)))
 
   private def toPathSegment[F[_]](s: Stream[F, APath], dir: APath): Stream[F, PathSegment] =
     s.filter(path => Path.parentDir(path) === pathToDir(dir))
