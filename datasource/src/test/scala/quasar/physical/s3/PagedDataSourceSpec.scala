@@ -27,7 +27,7 @@ import org.http4s.client.blaze.Http1Client
 final class PagedS3DataSourceSpec extends S3DataSourceSpec {
   // Force S3 to return a single element per page in ListBuckets,
   // to ensure pagination works correctly
-  private val maxKeys = Map("max-keys" -> "1")
+  private val maxKeys = Map("max-keys" -> "2")
 
   override val discoveryLD = new S3DataSource[IO, IO](
     Http1Client[IO]().unsafeRunSync,
