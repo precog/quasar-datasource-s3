@@ -34,12 +34,12 @@ final class PagedS3DataSourceSpec extends S3DataSourceSpec {
     S3Config(
       Uri.uri("https://s3.amazonaws.com/slamdata-public-test"),
       S3JsonParsing.LineDelimited,
-      None), maxKeys)(global)
+      None), Map.empty)(global)
 
   override val discovery = new S3DataSource[IO, IO](
     Http1Client[IO]().unsafeRunSync,
     S3Config(
       Uri.uri("https://s3.amazonaws.com/slamdata-public-test"),
       S3JsonParsing.JsonArray,
-      None), maxKeys)(global)
+      None), Map.empty)(global)
 }
