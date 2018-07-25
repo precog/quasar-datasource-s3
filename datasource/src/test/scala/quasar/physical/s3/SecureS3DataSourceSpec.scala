@@ -18,8 +18,8 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 
+import quasar.connector.ResourceError
 import quasar.contrib.scalaz.MonadError_
-import quasar.common.resource.ResourceError
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.io.{Source, Codec}

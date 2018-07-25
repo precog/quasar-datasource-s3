@@ -17,24 +17,24 @@
 package quasar.physical.s3
 
 
-import quasar.common.data.Data
-import quasar.common.resource.MonadResourceErr
-import quasar.common.resource.ResourcePath
+import quasar.Disposable
 import quasar.api.datasource.DatasourceError.{InitializationError, MalformedConfiguration}
 import quasar.api.datasource.DatasourceType
+import quasar.api.resource.ResourcePath
+import quasar.common.data.Data
 import quasar.connector.Datasource
 import quasar.connector.LightweightDatasourceModule
-import quasar.Disposable
+import quasar.connector.MonadResourceErr
 
 import argonaut.Json
 import cats.effect.{Timer, ConcurrentEffect}
 import fs2.Stream
-import scalaz.\/
-import scalaz.syntax.either._
-import scalaz.syntax.applicative._
-import slamdata.Predef.{Stream => _, _}
 import org.http4s.client.blaze.Http1Client
+import scalaz.\/
+import scalaz.syntax.applicative._
+import scalaz.syntax.either._
 import shims._
+import slamdata.Predef.{Stream => _, _}
 
 object S3DataSourceModule extends LightweightDatasourceModule {
   def kind: DatasourceType = s3.datasourceKind

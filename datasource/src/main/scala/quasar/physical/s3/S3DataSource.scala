@@ -17,10 +17,10 @@
 package quasar.physical.s3
 
 import quasar.api.datasource.DatasourceType
+import quasar.api.resource.ResourcePath.{Leaf, Root}
+import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.common.data.Data
-import quasar.common.resource.MonadResourceErr
-import quasar.common.resource.ResourcePath.{Leaf, Root}
-import quasar.common.resource.{ResourceName, ResourcePath, ResourcePathType}
+import quasar.connector.MonadResourceErr
 import quasar.connector.datasource.LightweightDatasource
 import quasar.contrib.pathy.APath
 
