@@ -16,14 +16,14 @@ object Dependencies {
   // in an object.
   // we need to be compatible with Quasar's version of both
   // fs2 and jawn, so we use the older circe-jawn version.
-  private val quasarVersion = IO.read(file("./quasar-version")).trim
-  private val circeJawnVersion = "0.9.3"
-  private val fs2Version = "0.10.5"
-  private val specsVersion = "4.2.0"
-  private val shimsVersion = "1.3.0"
-  private val argonautVersion = "6.2"
+  private val argonautVersion = "6.2.2"
   private val catsEffectVersion = "0.10.1"
   private val circeFs2Version = "0.9.0"
+  private val circeJawnVersion = "0.9.3"
+  private val fs2Version = "0.10.5"
+  private val quasarVersion = IO.read(file("./quasar-version")).trim
+  private val shimsVersion = "1.2.1"
+  private val specsVersion = "4.1.2"
 
   // http4s-blaze-client's version has to be in sync with
   // quasar's http4s version. The same goes for any
@@ -33,7 +33,7 @@ object Dependencies {
     "org.http4s"             %% "http4s-blaze-client" % http4sVersion,
     "org.scala-lang.modules" %% "scala-xml"           % scalaXmlVersion,
     "io.circe"               %% "circe-jawn"          % circeJawnVersion,
-    "com.codecommit"         %% "shims-effect"        % shimsVersion,
+    "com.codecommit"         %% "shims"               % shimsVersion,
     "org.typelevel"          %% "cats-effect"         % catsEffectVersion,
     "org.specs2"             %% "specs2-core"         % specsVersion % Test,
     "org.specs2"             %% "specs2-scalaz"       % specsVersion % Test,
@@ -51,5 +51,6 @@ object Dependencies {
     "com.slamdata" %% "quasar-foundation-internal" % quasarVersion,
     "com.slamdata" %% "quasar-foundation-internal" % quasarVersion % Test classifier "tests",
     "com.slamdata" %% "quasar-connector-internal"  % quasarVersion,
+    "com.slamdata" %% "quasar-connector-internal"  % quasarVersion % Test classifier "tests",
   )
 }

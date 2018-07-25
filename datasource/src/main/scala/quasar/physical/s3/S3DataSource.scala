@@ -16,14 +16,12 @@
 
 package quasar.physical.s3
 
-import quasar.Data
-import quasar.api.ResourceError
-import quasar.api.ResourceError.{CommonError, ReadError}
-import quasar.api.ResourcePath.{Leaf, Root}
 import quasar.api.datasource.DatasourceType
-import quasar.api.{ResourceName, ResourcePath, ResourcePathType}
+import quasar.common.data.Data
+import quasar.common.resource.MonadResourceErr
+import quasar.common.resource.ResourcePath.{Leaf, Root}
+import quasar.common.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.connector.datasource.LightweightDatasource
-import quasar.contrib.cats.effect._
 import quasar.contrib.pathy.APath
 
 import scala.concurrent.duration.SECONDS
@@ -31,58 +29,55 @@ import slamdata.Predef.{Stream => _, _}
 
 import java.time.{ZoneOffset, LocalDateTime}
 
-import cats.arrow.FunctionK
-import cats.effect.{Effect, Async, Timer}
+import cats.effect.{Effect, Timer}
 import cats.syntax.flatMap._
+import cats.syntax.option._
 import fs2.Stream
 import org.http4s.{Request, Header, Headers}
 import org.http4s.client.Client
 import pathy.Path
 import pathy.Path.{DirName, FileName}
 import scalaz.syntax.applicative._
-import scalaz.syntax.either._
-import scalaz.{\/, \/-, -\/}
+import scalaz.{\/-, -\/}
 import shims._
 
-final class S3DataSource[F[_]: Effect: Timer, G[_]: Async](
+final class S3DataSource[F[_]: Effect: Timer: MonadResourceErr](
   client: Client[F],
   config: S3Config)
-    extends LightweightDatasource[F, Stream[G, ?], Stream[G, Data]] {
+    extends LightweightDatasource[F, Stream[F, ?], Stream[F, Data]] {
   def kind: DatasourceType = s3.datasourceKind
 
-  val shutdown: F[Unit] = client.shutdown
-
-  def evaluate(path: ResourcePath): F[ReadError \/ Stream[G, Data]] =
+  def evaluate(path: ResourcePath): F[Stream[F, Data]] =
     path match {
       case Root =>
-        ResourceError.notAResource(path).left.point[F]
+        Stream.empty.covaryAll[F, Data].pure[F]
       case Leaf(file) =>
         impl.evaluate[F](config.parsing, client, config.bucket, file, S3DataSource.signRequest(config)) map {
-        case None => (ResourceError.pathNotFound(Leaf(file)): ReadError).left
-        /* In http4s, the type of streaming results is the same as
-         every other effectful operation. However,
-         LightweightDatasourceModule forces us to separate the types,
-         so we need to translate */
-        case Some(s) => s.translate[G](FToG).right[ReadError]
-      }
+          case None => Stream.empty
+          /* In http4s, the type of streaming results is the same as
+           every other effectful operation. However,
+           LightweightDatasourceModule forces us to separate the types,
+           so we need to translate */
+          case Some(s) => s
+        }
     }
 
-  def children(path: ResourcePath): F[CommonError \/ Stream[G, (ResourceName, ResourcePathType)]] =
+  def prefixedChildPaths(path: ResourcePath): F[Option[Stream[F, (ResourceName, ResourcePathType)]]] =
     impl.children(
       client,
       config.bucket,
       dropEmpty(path.toPath),
       S3DataSource.signRequest(config)) map {
       case None =>
-        ResourceError.pathNotFound(path).left[Stream[G, (ResourceName, ResourcePathType)]]
+        none[Stream[F, (ResourceName, ResourcePathType)]]
       case Some(paths) =>
         paths.map {
-          case -\/(Path.DirName(dn)) => (ResourceName(dn), ResourcePathType.ResourcePrefix)
-          case \/-(Path.FileName(fn)) => (ResourceName(fn), ResourcePathType.Resource)
-        }.translate[G](FToG).right[CommonError]
+          case -\/(Path.DirName(dn)) => (ResourceName(dn), ResourcePathType.prefix)
+          case \/-(Path.FileName(fn)) => (ResourceName(fn), ResourcePathType.leafResource)
+        }.some
     }
 
-  def isResource(path: ResourcePath): F[Boolean] = path match {
+  def pathIsResource(path: ResourcePath): F[Boolean] = path match {
     case Root => false.pure[F]
     case Leaf(file) => Path.refineType(dropEmpty(file)) match {
       case -\/(_) => false.pure[F]
@@ -96,10 +91,6 @@ final class S3DataSource[F[_]: Effect: Timer, G[_]: Async](
       case Some((d, -\/(DirName(dn)))) if dn.isEmpty => d
       case _ => path
     }
-
-  private val FToG: FunctionK[F, G] = new FunctionK[F, G] {
-    def apply[A](fa: F[A]): G[A] = fa.to[G]
-  }
 }
 
 object S3DataSource {

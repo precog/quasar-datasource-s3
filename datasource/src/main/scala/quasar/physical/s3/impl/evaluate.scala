@@ -17,7 +17,7 @@
 package quasar.physical.s3
 package impl
 
-import quasar.Data
+import quasar.common.data.Data
 import quasar.contrib.pathy._
 import quasar.physical.s3.S3JsonParsing
 

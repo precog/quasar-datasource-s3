@@ -18,8 +18,9 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 
-import quasar.api.ResourceDiscoverySpec
-import quasar.api.{ResourceName, ResourcePath, ResourcePathType}
+import quasar.connector.DatasourceSpec
+import quasar.common.resource.{ResourceName, ResourcePath, ResourcePathType, ResourceError}
+import quasar.contrib.scalaz.MonadError_
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -28,31 +29,31 @@ import fs2.Stream
 import org.http4s.Uri
 import org.http4s.client.blaze.Http1Client
 import scalaz.syntax.applicative._
-import scalaz.{Foldable, Monoid, Id, ~>}, Id.Id
+import scalaz.{Id, ~>}, Id.Id
 import shims._
 
 import S3DataSourceSpec._
 
-class S3DataSourceSpec extends ResourceDiscoverySpec[IO, Stream[IO, ?]] {
+class S3DataSourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
   "the root of a bucket with a trailing slash is not a resource" >>* {
     val root = ResourcePath.root() / ResourceName("")
-    discovery.isResource(root).map(_ must beFalse)
+    datasource.pathIsResource(root).map(_ must beFalse)
   }
 
   "the root of a bucket is not a resource" >>* {
     val root = ResourcePath.root()
-    discovery.isResource(root).map(_ must beFalse)
+    datasource.pathIsResource(root).map(_ must beFalse)
   }
 
   "a prefix without contents is not a resource" >>* {
     val path = ResourcePath.root() / ResourceName("prefix3") / ResourceName("subprefix5")
-    discovery.isResource(path).map(_ must beFalse)
+    datasource.pathIsResource(path).map(_ must beFalse)
   }
 
   "list nested children" >>* {
     val path = ResourcePath.root() / ResourceName("dir1") / ResourceName("dir2") / ResourceName("dir3")
 
-    val listing = discovery.children(path)
+    val listing = datasource.prefixedChildPaths(path)
 
     listing.flatMap { list =>
       list.map(_.compile.toList)
@@ -60,20 +61,20 @@ class S3DataSourceSpec extends ResourceDiscoverySpec[IO, Stream[IO, ?]] {
         .map {
           case List((resource, resourceType)) =>
             resource must_= ResourceName("flattenable.data")
-            resourceType must_= ResourcePathType.resource
+            resourceType must_= ResourcePathType.leafResource
         }
     }
   }
 
   "list children at the root of the bucket" >>* {
-    discovery.children(ResourcePath.root()).flatMap { list =>
+    datasource.prefixedChildPaths(ResourcePath.root()).flatMap { list =>
       list.map(_.compile.toList).getOrElse(IO.raiseError(new Exception("Could not list children under the root")))
         .map(resources => {
           resources.length must_== 4
-          resources(0) must_== (ResourceName("dir1") -> ResourcePathType.resourcePrefix)
-          resources(1) must_== (ResourceName("extraSmallZips.data") -> ResourcePathType.resource)
-          resources(2) must_== (ResourceName("prefix3") -> ResourcePathType.resourcePrefix)
-          resources(3) must_== (ResourceName("testData") -> ResourcePathType.resourcePrefix)
+          resources(0) must_== (ResourceName("dir1") -> ResourcePathType.prefix)
+          resources(1) must_== (ResourceName("extraSmallZips.data") -> ResourcePathType.leafResource)
+          resources(2) must_== (ResourceName("prefix3") -> ResourcePathType.prefix)
+          resources(3) must_== (ResourceName("testData") -> ResourcePathType.prefix)
         })
     }
   }
@@ -81,19 +82,17 @@ class S3DataSourceSpec extends ResourceDiscoverySpec[IO, Stream[IO, ?]] {
   "an actual file is a resource" >>* {
     val res = ResourcePath.root() / ResourceName("testData") / ResourceName("array.json")
 
-    discovery.isResource(res) map (_ must beTrue)
+    datasource.pathIsResource(res) map (_ must beTrue)
   }
 
   "read line-delimited and array JSON" >>* {
-    val ld = discoveryLD.evaluate(ResourcePath.root() / ResourceName("testData") / ResourceName("lines.json"))
-    val array = discovery.evaluate(ResourcePath.root() / ResourceName("testData") / ResourceName("array.json"))
+    val ld = datasourceLD.evaluate(ResourcePath.root() / ResourceName("testData") / ResourceName("lines.json"))
+    val array = datasource.evaluate(ResourcePath.root() / ResourceName("testData") / ResourceName("array.json"))
 
     (ld |@| array).tupled.flatMap {
       case (readLD, readArray) => {
-        val rd = readLD.map(_.compile.toList)
-          .toOption.getOrElse(IO.raiseError(new Exception("Could not read lines.json")))
-        val ra = readArray.map(_.compile.toList)
-          .toOption.getOrElse(IO.raiseError(new Exception("Could not read array.json")))
+        val rd = readLD.compile.toList
+        val ra = readArray.compile.toList
 
         (rd |@| ra) {
           case (lines, array) => {
@@ -105,14 +104,16 @@ class S3DataSourceSpec extends ResourceDiscoverySpec[IO, Stream[IO, ?]] {
     }
   }
 
-  val discoveryLD = new S3DataSource[IO, IO](
+  def gatherMultiple[A](g: Stream[IO, A]) = g.compile.toList
+
+  val datasourceLD = new S3DataSource[IO](
     Http1Client[IO]().unsafeRunSync,
     S3Config(
       Uri.uri("https://s3.amazonaws.com/slamdata-public-test"),
       S3JsonParsing.LineDelimited,
       None))
 
-  val discovery = new S3DataSource[IO, IO](
+  val datasource = new S3DataSource[IO](
     Http1Client[IO]().unsafeRunSync,
     S3Config(
       Uri.uri("https://s3.amazonaws.com/slamdata-public-test"),
@@ -126,9 +127,6 @@ class S3DataSourceSpec extends ResourceDiscoverySpec[IO, Stream[IO, ?]] {
 }
 
 object S3DataSourceSpec {
-  implicit val unsafeStreamFoldable: Foldable[Stream[IO, ?]] =
-    new Foldable[Stream[IO, ?]] with Foldable.FromFoldMap[Stream[IO, ?]] {
-      def foldMap[A, M](fa: Stream[IO, A])(f: A => M)(implicit M: Monoid[M]) =
-        fa.compile.fold(M.zero)((m, a) => M.append(m, f(a))).unsafeRunSync
-    }
+  implicit val ioMonadResourceErr: MonadError_[IO, ResourceError] =
+    MonadError_.facet[IO](ResourceError.throwableP)
 }

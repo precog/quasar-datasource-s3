@@ -124,8 +124,6 @@ object children {
     bucket: Uri,
     dir: APath,
     ct: Option[ContinuationToken]): Request[F] = {
-    // Converts a pathy Path to an S3 object prefix.
-    val objectPrefix = aPathToObjectPrefix(dir)
 
     // Start with the bucket URI; add an extra `/` on the end
     // so that S3 understands us.
@@ -135,12 +133,13 @@ object children {
     val listingQuery = (bucket / "")
 
     val listType = ("list-type", "2").some
+    // Converts a pathy Path to an S3 object prefix.
+    val objectPrefix = aPathToObjectPrefix(dir)
     val prefix = objectPrefix.map(("prefix", _))
+
     val ct0 = ct.map(_.value).map(("continuation-token", _))
 
-    val params = List(listType, prefix, ct0).unite
-
-    val queryUri = params.foldLeft(listingQuery) {
+    val queryUri = List(listType, prefix, ct0).unite.foldLeft(listingQuery) {
       case (uri0, (param, value)) => uri0.withQueryParam(param, value)
     }
 
