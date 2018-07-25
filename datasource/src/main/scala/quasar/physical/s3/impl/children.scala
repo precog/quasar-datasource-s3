@@ -41,9 +41,10 @@ import cats.syntax.functor._
 import cats.syntax.option._
 import cats.syntax.traverse._
 import fs2.Stream
-import org.http4s.{Uri, Request}
 import org.http4s.client.Client
+import org.http4s.headers.`Content-Type`
 import org.http4s.scalaxml.{xml => xmlDecoder}
+import org.http4s.{Charset, DecodeResult, EntityDecoder, MediaRange, Message, Request, Uri}
 import pathy.Path
 import pathy.Path.{DirName, FileName}
 import scala.xml.Elem
@@ -117,7 +118,8 @@ object children {
     next: Option[ContinuationToken],
     sign: Request[F] => F[Request[F]])
       : F[Elem] =
-    sign(listingRequest(client, bucket, dir, next)).flatMap(client.expect[Elem](_))
+    sign(listingRequest(client, bucket, dir, next))
+      .flatMap(client.expect[Elem](_)(utf8Xml))
 
   private def listingRequest[F[_]](
     client: Client[F],
@@ -215,6 +217,18 @@ object children {
       case None if Path.depth(path) === 0 => Path.rootDir.some
       case _ => none
     }
+
+  private def utf8Xml[F[_]: Sync](implicit ev: EntityDecoder[F, Elem]): EntityDecoder[F, Elem] = {
+    new EntityDecoder[F, Elem] {
+      override def consumes: Set[MediaRange] =
+        ev.consumes
+      override def decode(msg: Message[F], strict: Boolean): DecodeResult[F, Elem] = {
+        val utf8ContentType = msg.headers.get(`Content-Type`).map(_.withCharset(Charset.`UTF-8`))
+
+        ev.decode(msg.withContentTypeOption(utf8ContentType), strict)
+      }
+    }
+  }
 
   private final case class ContinuationToken(value: String)
 

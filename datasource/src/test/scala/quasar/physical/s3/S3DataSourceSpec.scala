@@ -25,6 +25,7 @@ import quasar.contrib.scalaz.MonadError_
 import scala.concurrent.ExecutionContext.Implicits.global
 
 import cats.effect.IO
+import cats.data.OptionT
 import fs2.Stream
 import org.http4s.Uri
 import org.http4s.client.blaze.Http1Client
@@ -102,6 +103,15 @@ class S3DataSourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
         }
       }
     }
+  }
+
+  "list a file with special characters in it" >>* {
+    OptionT(datasource.prefixedChildPaths(ResourcePath.root() / ResourceName("dir1")))
+      .getOrElseF(IO.raiseError(new Exception(s"Failed to list resources under dir1")))
+      .flatMap(_.compile.toList).map { results =>
+        results(0) must_== (ResourceName("dir2") -> ResourcePathType.prefix)
+        results(1) must_== (ResourceName("fóóbar.ldjson") -> ResourcePathType.leafResource)
+      }
   }
 
   def gatherMultiple[A](g: Stream[IO, A]) = g.compile.toList
