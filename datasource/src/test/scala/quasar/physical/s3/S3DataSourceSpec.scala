@@ -18,8 +18,9 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 
+import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.connector.DatasourceSpec
-import quasar.common.resource.{ResourceName, ResourcePath, ResourcePathType, ResourceError}
+import quasar.connector.ResourceError
 import quasar.contrib.scalaz.MonadError_
 
 import scala.concurrent.ExecutionContext.Implicits.global
