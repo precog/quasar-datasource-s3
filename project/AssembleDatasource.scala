@@ -10,6 +10,7 @@ import scala.sys.process._
 import java.util.stream.Collectors
 import java.lang.Runtime
 
+import io.circe.Json
 import sbt.{Cache => _, MavenRepository => _, Tags => _, Task => _, _}
 import sbt.Keys._
 import scalaz._, Scalaz._
@@ -137,13 +138,13 @@ object AssembleDatasource {
 
         // the .plugin file requires all dependency jar paths
         // to be relative to the plugins folder
-        classPath = fetchedJarFiles.map(p => datasourcePluginsFolder.toPath.relativize(p.toPath)) ++ Seq(relativeDatasourceJarPath)
+        classPath = fetchedJarFiles.map(p => datasourcePluginsFolder.toPath.relativize(p.toPath)) ++ List(relativeDatasourceJarPath)
 
-        // format the classPath as readable json for the .plugin file
-        cpJson = classPath.map(s => "\"" + s + "\"").mkString("[\n    ", ",\n    ", "\n  ]")
+        cpJson = Json.arr(classPath.map(_.toString).map(Json.fromString(_)) :_*)
+        mainJar = Json.fromString(relativeDatasourceJarPath)
 
         // include the datasource jar and classpath into the .plugin file
-        outJson = s"""{\n  "mainJar": "$relativeDatasourceJarPath",\n  "classPath": $cpJson\n}"""
+        outJson = Json.obj("mainJar" -> mainJar, "classPath" -> cpJson).spaces2
 
         // delete an old .plugin file, write the new one
         _ <- Task.delay {
