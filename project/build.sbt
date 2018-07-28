@@ -7,7 +7,8 @@ libraryDependencies += "org.kohsuke" % "github-api" % "1.59" exclude("org.jenkin
 // should remain the newest coursier version.
 libraryDependencies ++= Seq(
   "io.get-coursier" %% "coursier" % "1.0.1",
-  "io.get-coursier" %% "coursier-cache" % "1.0.1"
+  "io.get-coursier" %% "coursier-cache" % "1.0.1",
+  "io.circe" %% "circe-core" % "0.9.3"
 )
 
 scalacOptions --= Seq(
