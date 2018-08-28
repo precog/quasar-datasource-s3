@@ -41,7 +41,7 @@ import cats.syntax.functor._
 import cats.syntax.option._
 import cats.syntax.traverse._
 import fs2.Stream
-import org.http4s.Status
+import org.http4s.{MalformedMessageBodyFailure, Status}
 import org.http4s.client.{Client, UnexpectedStatus}
 import org.http4s.headers.`Content-Type`
 import org.http4s.scalaxml.{xml => xmlDecoder}
@@ -92,6 +92,7 @@ object children {
     OptionT(e.value.flatMap {
       case Left(S3Error.NotFound) => none.pure[F]
       case Left(S3Error.Forbidden) => none.pure[F]
+      case Left(S3Error.MalformedResponse) => none.pure[F]
       case Left(S3Error.UnexpectedResponse(msg)) => Sync[F].raiseError(new Exception(msg))
       case Right(a) => a.some.pure[F]
     })
@@ -125,6 +126,7 @@ object children {
     EitherT(sign(listingRequest(client, bucket, dir, next)).flatMap { r =>
       Sync[F].recover[Either[S3Error, Elem]](client.expect[Elem](r)(utf8Xml).map(_.asRight)) {
         case UnexpectedStatus(Status.Forbidden) => S3Error.Forbidden.asLeft
+        case MalformedMessageBodyFailure(_, _) => S3Error.MalformedResponse.asLeft
       }
     })
 

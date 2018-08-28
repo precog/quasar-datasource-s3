@@ -27,6 +27,7 @@ object S3Error {
   final case object NotFound extends S3Error
   final case class UnexpectedResponse(msg: String) extends S3Error
   final case object Forbidden extends S3Error
+  final case object MalformedResponse extends S3Error
 }
 
 sealed trait S3JsonParsing
