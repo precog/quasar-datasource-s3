@@ -76,6 +76,14 @@ class S3DataSourceModuleSpec extends Specification {
 
     S3DataSourceModule.sanitizeConfig(conf) must_== redactedConf
   }
+
+  "does nothing when there are no credentials to redact" >> {
+    val conf = Json.obj(
+      "bucket" -> Json.jString("https://some.bucket.uri"),
+      "jsonParsing" -> Json.jString("array"))
+
+    S3DataSourceModule.sanitizeConfig(conf) must_== conf
+  }
 }
 
 object S3DataSourceModuleSpec {
