@@ -32,10 +32,22 @@ import shims._
 class S3DataSourceModuleSpec extends Specification {
   import S3DataSourceModuleSpec._
 
-  "validates credentials when creating a new S3DataSource" >> {
+  "rejects invalid credentials" >> {
     // slamdata-private-test is a bucket that requires credentials to access
     val conf = Json.obj(
       "bucket" -> Json.jString("https://s3.amazonaws.com/slamdata-private-test"),
+      "jsonParsing" -> Json.jString("array"))
+
+    val ds = S3DataSourceModule.lightweightDatasource[IO](conf).unsafeRunSync.toEither
+
+    ds must beLike {
+      case Left(InvalidConfiguration(_, _, _)) => ok
+    }
+  }
+
+  "rejects a non-bucket URI" >> {
+    val conf = Json.obj(
+      "bucket" -> Json.jString("https://example.com"),
       "jsonParsing" -> Json.jString("array"))
 
     val ds = S3DataSourceModule.lightweightDatasource[IO](conf).unsafeRunSync.toEither
