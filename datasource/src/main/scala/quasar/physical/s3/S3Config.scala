@@ -17,11 +17,12 @@
 package quasar.physical.s3
 
 import slamdata.Predef._
-import argonaut.{DecodeJson, DecodeResult}
+import argonaut.{DecodeJson, DecodeResult, EncodeJson, Json}
 import org.http4s.Uri
 import cats.syntax.apply._
 import cats.syntax.flatMap._
 import cats.instances.option._
+import scalaz.syntax.show._
 import slamdata.Predef._
 import shims._
 
@@ -99,6 +100,13 @@ object S3Config {
           DecodeResult.fail(failureMsg, c.history)
       }
     }
+
+  implicit val encodeJson: EncodeJson[S3Config] =
+    EncodeJson { config =>
+      Json.obj(
+        "bucket" -> Json.jString(config.bucket.renderString),
+        "jsonParsing" -> Json.jString(config.parsing.shows))
+    }
 }
 
 object S3Credentials {
@@ -117,4 +125,13 @@ object S3Credentials {
         case None => DecodeResult.fail(incompleteCredsMsg, c.history)
       }
     }
+
+  implicit val encodeJson: EncodeJson[S3Credentials] =
+    EncodeJson { creds =>
+      Json.obj(
+        "accessKey" -> Json.jString(creds.accessKey.value),
+        "secretKey" -> Json.jString(creds.secretKey.value),
+        "region"    -> Json.jString(creds.region.name))
+    }
+
 }

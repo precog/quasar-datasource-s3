@@ -19,6 +19,7 @@ package quasar.physical.s3
 import scala.Predef._
 import quasar.api.datasource.DatasourceType
 import eu.timepit.refined.auto._
+import cats.Show
 
 sealed trait S3Error
 
@@ -33,6 +34,12 @@ sealed trait S3JsonParsing
 object S3JsonParsing {
   case object JsonArray extends S3JsonParsing
   case object LineDelimited extends S3JsonParsing
+
+  implicit def showS3JsonParsing: Show[S3JsonParsing] =
+    Show.show {
+      case JsonArray => "array"
+      case LineDelimited => "lineDelimited"
+    }
 }
 
 package object s3 {
