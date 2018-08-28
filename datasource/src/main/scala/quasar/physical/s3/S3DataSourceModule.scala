@@ -38,9 +38,7 @@ import scalaz.{\/, NonEmptyList}
 import scalaz.syntax.either._
 import scalaz.syntax.applicative._
 import scalaz.syntax.bind._
-import scalaz.syntax.functor._
 import scalaz.syntax.std.option._
-import scalaz.std.option._
 import shims._
 import slamdata.Predef.{Stream => _, _}
 
@@ -80,13 +78,10 @@ object S3DataSourceModule extends LightweightDatasourceModule {
       S3Credentials(
         AccessKey("<REDACTED>"),
         SecretKey("<REDACTED>"),
-        Region("<REDACTED>")).some
+        Region("<REDACTED>"))
 
-    val redacted = config.as[S3Config].flatMap(c =>
-      c.credentials.as(c.copy(credentials = redactedCreds)))
-
-    EncodeJson.of[S3Config]
-      .encode[S3Config](redacted).toOption.getOrElse(config)
+    config.as[S3Config].result.toOption.map((c: S3Config) =>
+      c.credentials.fold(c)(_ => c.copy(credentials = redactedCreds.some)))
+      .fold(config)(rc => EncodeJson.of[S3Config].encode(rc))
   }
-
 }

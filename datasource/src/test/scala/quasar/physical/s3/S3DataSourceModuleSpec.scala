@@ -56,6 +56,26 @@ class S3DataSourceModuleSpec extends Specification {
       case Left(InvalidConfiguration(_, _, _)) => ok
     }
   }
+
+  "removes AccessKey, SecretKey and Region from credentials" >> {
+    val conf = Json.obj(
+      "bucket" -> Json.jString("https://some.bucket.uri"),
+      "jsonParsing" -> Json.jString("array"),
+      "credentials" -> Json.obj(
+        "accessKey" -> Json.jString("some access key"),
+        "secretKey" -> Json.jString("super secret key"),
+        "region" -> Json.jString("us-east-1")))
+
+    val redactedConf = Json.obj(
+      "bucket" -> Json.jString("https://some.bucket.uri"),
+      "jsonParsing" -> Json.jString("array"),
+      "credentials" -> Json.obj(
+        "accessKey" -> Json.jString("<REDACTED>"),
+        "secretKey" -> Json.jString("<REDACTED>"),
+        "region" -> Json.jString("<REDACTED>")))
+
+    S3DataSourceModule.sanitizeConfig(conf) must_== redactedConf
+  }
 }
 
 object S3DataSourceModuleSpec {

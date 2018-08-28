@@ -102,11 +102,17 @@ object S3Config {
     }
 
   implicit val encodeJson: EncodeJson[S3Config] =
-    EncodeJson { config =>
+    EncodeJson(config => config.credentials.fold(
       Json.obj(
         "bucket" -> Json.jString(config.bucket.renderString),
-        "jsonParsing" -> Json.jString(config.parsing.shows))
-    }
+        "jsonParsing" -> Json.jString(config.parsing.shows)))
+      (creds => Json.obj(
+        "bucket" -> Json.jString(config.bucket.renderString),
+        "jsonParsing" -> Json.jString(config.parsing.shows),
+        "credentials" -> Json.obj(
+          "accessKey" -> Json.jString(creds.accessKey.value),
+          "secretKey" -> Json.jString(creds.secretKey.value),
+          "region"    -> Json.jString(creds.region.name)))))
 }
 
 object S3Credentials {
