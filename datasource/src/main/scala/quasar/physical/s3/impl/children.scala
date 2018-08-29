@@ -41,7 +41,8 @@ import cats.syntax.functor._
 import cats.syntax.option._
 import cats.syntax.traverse._
 import fs2.Stream
-import org.http4s.client.Client
+import org.http4s.{MalformedMessageBodyFailure, Status}
+import org.http4s.client.{Client, UnexpectedStatus}
 import org.http4s.headers.`Content-Type`
 import org.http4s.scalaxml.{xml => xmlDecoder}
 import org.http4s.{Charset, DecodeResult, EntityDecoder, MediaRange, Message, Request, Uri}
@@ -85,11 +86,14 @@ object children {
 
   ///
 
-  // converts non-recoverable errors to runtime errors
+  // converts non-recoverable errors to runtime errors. Also decide
+  // which errors we want to report as None rather than runtime exceptions.
   private def handleS3[F[_]: Sync, A](e: EitherT[F, S3Error, A]): OptionT[F, A] =
     OptionT(e.value.flatMap {
-      case Left(S3Error.UnexpectedResponse(msg)) => Sync[F].raiseError(new Exception(msg))
       case Left(S3Error.NotFound) => none.pure[F]
+      case Left(S3Error.Forbidden) => none.pure[F]
+      case Left(S3Error.MalformedResponse) => none.pure[F]
+      case Left(S3Error.UnexpectedResponse(msg)) => Sync[F].raiseError(new Exception(msg))
       case Right(a) => a.some.pure[F]
     })
 
@@ -102,8 +106,9 @@ object children {
     next: Option[ContinuationToken],
     sign: Request[F] => F[Request[F]])
       : EitherT[F, S3Error, (Stream[F, APath], Option[ContinuationToken])] =
-    EitherT(listObjects(client, bucket, dir, next, sign)
-      .map(extractList(_))).map(_.leftMap(Stream.emits(_)))
+    listObjects(client, bucket, dir, next, sign)
+      .flatMap(extractList(_).toEitherT)
+      .map(_.leftMap(Stream.emits(_)))
 
   private def toPathSegment[F[_]](s: Stream[F, APath], dir: APath): Stream[F, PathSegment] =
     s.filter(path => Path.parentDir(path) === pathToDir(dir))
@@ -117,9 +122,13 @@ object children {
     dir: APath,
     next: Option[ContinuationToken],
     sign: Request[F] => F[Request[F]])
-      : F[Elem] =
-    sign(listingRequest(client, bucket, dir, next))
-      .flatMap(client.expect[Elem](_)(utf8Xml))
+      : EitherT[F, S3Error, Elem] =
+    EitherT(sign(listingRequest(client, bucket, dir, next)).flatMap { r =>
+      Sync[F].recover[Either[S3Error, Elem]](client.expect[Elem](r)(utf8Xml).map(_.asRight)) {
+        case UnexpectedStatus(Status.Forbidden) => S3Error.Forbidden.asLeft
+        case MalformedMessageBodyFailure(_, _) => S3Error.MalformedResponse.asLeft
+      }
+    })
 
   private def listingRequest[F[_]](
     client: Client[F],

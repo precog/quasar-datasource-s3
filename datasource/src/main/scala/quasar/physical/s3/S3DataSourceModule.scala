@@ -18,7 +18,11 @@ package quasar.physical.s3
 
 
 import quasar.Disposable
-import quasar.api.datasource.DatasourceError.{InitializationError, MalformedConfiguration}
+import quasar.api.datasource.DatasourceError.{
+  InitializationError,
+  InvalidConfiguration,
+  MalformedConfiguration
+}
 import quasar.api.datasource.DatasourceType
 import quasar.api.resource.ResourcePath
 import quasar.common.data.Data
@@ -30,9 +34,10 @@ import argonaut.Json
 import cats.effect.{Timer, ConcurrentEffect}
 import fs2.Stream
 import org.http4s.client.blaze.Http1Client
-import scalaz.\/
-import scalaz.syntax.applicative._
+import scalaz.{\/, NonEmptyList}
 import scalaz.syntax.either._
+import scalaz.syntax.applicative._
+import scalaz.syntax.bind._
 import shims._
 import slamdata.Predef.{Stream => _, _}
 
@@ -43,13 +48,21 @@ object S3DataSourceModule extends LightweightDatasourceModule {
       : F[InitializationError[Json] \/ Disposable[F, Datasource[F, Stream[F, ?], ResourcePath, Stream[F, Data]]]] = {
     config.as[S3Config].result match {
       case Right(s3Config) => {
-        Http1Client[F]() map { client =>
-          val ds: Datasource[F, Stream[F, ?], ResourcePath, Stream[F, Data]] =
-            new S3DataSource[F](client, s3Config)
+        Http1Client[F]() flatMap { client =>
+          val s3Ds = new S3DataSource[F](client, s3Config)
+          val ds: Datasource[F, Stream[F, ?], ResourcePath, Stream[F, Data]] = s3Ds
 
-          val disposable = Disposable(ds, client.shutdown)
+          s3Ds.isLive.ifM({
+            val disposable = Disposable(ds, client.shutdown)
 
-          disposable.right[InitializationError[Json]]
+            disposable.right[InitializationError[Json]].point[F]
+          }, {
+            val msg = "Unable to ListObjects at the root of the bucket"
+            val err: InitializationError[Json] =
+              InvalidConfiguration(s3.datasourceKind, config, NonEmptyList(msg))
+
+            err.left[Disposable[F, Datasource[F, Stream[F, ?], ResourcePath, Stream[F, Data]]]].point[F]
+          })
         }
       }
 

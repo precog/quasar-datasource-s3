@@ -38,7 +38,7 @@ import org.http4s.client.Client
 import pathy.Path
 import pathy.Path.{DirName, FileName}
 import scalaz.syntax.applicative._
-import scalaz.{\/-, -\/}
+import scalaz.{\/-, -\/, OptionT}
 import shims._
 
 final class S3DataSource[F[_]: Effect: Timer: MonadResourceErr](
@@ -52,12 +52,8 @@ final class S3DataSource[F[_]: Effect: Timer: MonadResourceErr](
       case Root =>
         Stream.empty.covaryAll[F, Data].pure[F]
       case Leaf(file) =>
-        impl.evaluate[F](config.parsing, client, config.bucket, file, S3DataSource.signRequest(config)) map {
+        impl.evaluate[F](config.parsing, client, config.bucket, file, signRequest(config)) map {
           case None => Stream.empty
-          /* In http4s, the type of streaming results is the same as
-           every other effectful operation. However,
-           LightweightDatasourceModule forces us to separate the types,
-           so we need to translate */
           case Some(s) => s
         }
     }
@@ -67,7 +63,7 @@ final class S3DataSource[F[_]: Effect: Timer: MonadResourceErr](
       client,
       config.bucket,
       dropEmpty(path.toPath),
-      S3DataSource.signRequest(config)) map {
+      signRequest(config)) map {
       case None =>
         none[Stream[F, (ResourceName, ResourcePathType)]]
       case Some(paths) =>
@@ -81,9 +77,14 @@ final class S3DataSource[F[_]: Effect: Timer: MonadResourceErr](
     case Root => false.pure[F]
     case Leaf(file) => Path.refineType(dropEmpty(file)) match {
       case -\/(_) => false.pure[F]
-      case \/-(f) => impl.isResource(client, config.bucket, f, S3DataSource.signRequest(config))
+      case \/-(f) => impl.isResource(client, config.bucket, f, signRequest(config))
     }
   }
+
+  def isLive: F[Boolean] =
+    OptionT(prefixedChildPaths(ResourcePath.Root)).isDefined
+
+  //
 
   private def dropEmpty(path: APath): APath =
     Path.peel(path) match {
@@ -91,6 +92,9 @@ final class S3DataSource[F[_]: Effect: Timer: MonadResourceErr](
       case Some((d, -\/(DirName(dn)))) if dn.isEmpty => d
       case _ => path
     }
+
+  private def signRequest(c: S3Config): Request[F] => F[Request[F]] =
+    S3DataSource.signRequest(c)
 }
 
 object S3DataSource {
