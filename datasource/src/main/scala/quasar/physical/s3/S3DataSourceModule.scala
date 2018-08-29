@@ -30,7 +30,7 @@ import quasar.connector.Datasource
 import quasar.connector.LightweightDatasourceModule
 import quasar.connector.MonadResourceErr
 
-import argonaut.Json
+import argonaut.{EncodeJson, Json}
 import cats.effect.{Timer, ConcurrentEffect}
 import fs2.Stream
 import org.http4s.client.blaze.Http1Client
@@ -38,6 +38,7 @@ import scalaz.{\/, NonEmptyList}
 import scalaz.syntax.either._
 import scalaz.syntax.applicative._
 import scalaz.syntax.bind._
+import scalaz.syntax.std.option._
 import shims._
 import slamdata.Predef.{Stream => _, _}
 
@@ -70,5 +71,17 @@ object S3DataSourceModule extends LightweightDatasourceModule {
         (MalformedConfiguration(kind, config, msg): InitializationError[Json])
           .left[Disposable[F, Datasource[F, Stream[F, ?], ResourcePath, Stream[F, Data]]]].point[F]
     }
+  }
+
+  def sanitizeConfig(config: Json): Json = {
+    val redactedCreds =
+      S3Credentials(
+        AccessKey("<REDACTED>"),
+        SecretKey("<REDACTED>"),
+        Region("<REDACTED>"))
+
+    config.as[S3Config].result.toOption.map((c: S3Config) =>
+      c.credentials.fold(c)(_ => c.copy(credentials = redactedCreds.some)))
+      .fold(config)(rc => EncodeJson.of[S3Config].encode(rc))
   }
 }
