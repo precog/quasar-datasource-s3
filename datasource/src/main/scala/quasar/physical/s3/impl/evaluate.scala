@@ -20,15 +20,19 @@ package impl
 import quasar.common.data.Data
 import quasar.contrib.pathy._
 import quasar.physical.s3.S3JsonParsing
+import quasar.run.QuasarError
+import quasar.connector.ResourceError
+import quasar.api.resource.ResourcePath
 
 import slamdata.Predef._
 
+import cats.data.OptionT
 import cats.effect.{Effect, Timer, Sync}
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
 import cats.syntax.option._
 import fs2.{Pipe, Stream}
-import io.circe.Json
+import io.circe.{Json, ParsingFailure}
 import io.circe.fs2.{byteArrayParser, byteStreamParser}
 import org.http4s.client._
 import org.http4s.{Request, Response, Status, Uri}
@@ -75,6 +79,13 @@ object evaluate {
     }
   }
 
+  private def noParseError(p: AFile): QuasarError = {
+    val noParseMsg = """Could not parse the file as JSON. Ensure you've configured
+                       |the correct jsonParsing option for this bucket""".stripMargin.stripLineEnd
+
+    QuasarError.evaluating(
+      ResourceError.malformedResource(ResourcePath.Leaf(p), noParseMsg.some))
+  }
   // putting it all together.
   def apply[F[_]: Effect: Timer](
     jsonParsing: S3JsonParsing,
@@ -93,17 +104,24 @@ object evaluate {
     // figure out how we're going to parse the object as JSON
     val circeJsonPipe = circePipe[F](jsonParsing)
 
-    sign(request) >>= (r =>
-      streamRequestThroughFs2[F, Data](client, r) { resp =>
-        // convert the data to JSON, using the parsing method
-        // of our choice
-        val asJson: Stream[F, Json] = resp.body.through(circeJsonPipe)
+    sign(request) >>= { r =>
+      val stream =
+        OptionT(streamRequestThroughFs2[F, Data](client, r) { resp =>
+          // convert the data to JSON, using the parsing method
+          // of our choice
+          val asJson: Stream[F, Json] = resp.body.through(circeJsonPipe)
 
-        // convert the JSON from circe's representation to ours
-        val asData: Stream[F, Data] = asJson.map(circeJsonToData)
+          // convert the JSON from circe's representation to ours
+          val asData: Stream[F, Data] = asJson.map(circeJsonToData)
 
-        // and we're done.
-        asData
-      })
+          // and we're done.
+          asData
+        })
+
+      stream.map(_.handleErrorWith {
+        case ParsingFailure(_, _) =>
+          Stream.raiseError(QuasarError.throwableP(noParseError(file)))
+      }).value
+    }
   }
 }
