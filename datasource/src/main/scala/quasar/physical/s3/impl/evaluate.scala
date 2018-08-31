@@ -26,6 +26,7 @@ import quasar.api.resource.ResourcePath
 
 import slamdata.Predef._
 
+import cats.Show
 import cats.data.OptionT
 import cats.effect.{Effect, Timer, Sync}
 import cats.syntax.applicative._
@@ -79,11 +80,15 @@ object evaluate {
     }
   }
 
-  private def noParseError(p: AFile): QuasarError = {
+  private def noParseError(path: AFile, parsing: S3JsonParsing, message: String): QuasarError = {
     val noParseMsg = "Could not parse the file as JSON. Ensure you've configured the correct jsonParsing option for this bucket"
 
     QuasarError.evaluating(
-      ResourceError.malformedResource(ResourcePath.Leaf(p), noParseMsg.some))
+      ResourceError.malformedResource(
+        ResourcePath.Leaf(path),
+        Show[S3JsonParsing].show(parsing),
+        noParseMsg,
+        List(message)))
   }
   // putting it all together.
   def apply[F[_]: Effect: Timer](
@@ -118,8 +123,9 @@ object evaluate {
         })
 
       stream.map(_.handleErrorWith {
-        case ParsingFailure(_, _) =>
-          Stream.raiseError(QuasarError.throwableP(noParseError(file)))
+        case ParsingFailure(message, _) =>
+          Stream.raiseError(
+            QuasarError.throwableP(noParseError(file, jsonParsing, message)))
       }).value
     }
   }
