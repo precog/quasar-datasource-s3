@@ -80,8 +80,7 @@ object evaluate {
   }
 
   private def noParseError(p: AFile): QuasarError = {
-    val noParseMsg = """Could not parse the file as JSON. Ensure you've configured
-                       |the correct jsonParsing option for this bucket""".stripMargin.stripLineEnd
+    val noParseMsg = "Could not parse the file as JSON. Ensure you've configured the correct jsonParsing option for this bucket"
 
     QuasarError.evaluating(
       ResourceError.malformedResource(ResourcePath.Leaf(p), noParseMsg.some))
