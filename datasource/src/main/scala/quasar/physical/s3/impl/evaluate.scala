@@ -20,13 +20,11 @@ package impl
 import quasar.common.data.Data
 import quasar.contrib.pathy._
 import quasar.physical.s3.S3JsonParsing
-import quasar.run.QuasarError
-import quasar.connector.ResourceError
+import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.api.resource.ResourcePath
 
 import slamdata.Predef._
 
-import cats.Show
 import cats.data.OptionT
 import cats.effect.{Effect, Timer, Sync}
 import cats.syntax.applicative._
@@ -80,23 +78,28 @@ object evaluate {
     }
   }
 
-  private def noParseError(path: AFile, parsing: S3JsonParsing, message: String): QuasarError = {
-    val noParseMsg = "Could not parse the file as JSON. Ensure you've configured the correct jsonParsing option for this bucket"
+  private def noParseError(path: AFile, parsing: S3JsonParsing, message: String): ResourceError = {
+    val noParseMsg = s"Could not parse the file as JSON. Ensure you've configured the correct jsonParsing option for this bucket: $message"
+    val expectedFormat = parsing match {
+      case S3JsonParsing.LineDelimited => "Newline-delimited JSON"
+      case S3JsonParsing.JsonArray => "Array-wrapped JSON"
+    }
 
-    QuasarError.evaluating(
-      ResourceError.malformedResource(
-        ResourcePath.Leaf(path),
-        Show[S3JsonParsing].show(parsing),
-        noParseMsg,
-        List(message)))
+    ResourceError.malformedResource(
+      ResourcePath.Leaf(path),
+      expectedFormat,
+      noParseMsg)
   }
+
   // putting it all together.
   def apply[F[_]: Effect: Timer](
     jsonParsing: S3JsonParsing,
     client: Client[F],
     uri: Uri,
     file: AFile,
-    sign: Request[F] => F[Request[F]]): F[Option[Stream[F, Data]]] = {
+    sign: Request[F] => F[Request[F]])
+    (implicit MR: MonadResourceErr[F])
+      : F[Option[Stream[F, Data]]] = {
     // convert the pathy Path to a POSIX path, dropping
     // the first slash, like S3 expects for object paths
     val objectPath = Path.posixCodec.printPath(file).drop(1)
@@ -124,8 +127,7 @@ object evaluate {
 
       stream.map(_.handleErrorWith {
         case ParsingFailure(message, _) =>
-          Stream.raiseError(
-            QuasarError.throwableP(noParseError(file, jsonParsing, message)))
+          Stream.eval(MR.raiseError(noParseError(file, jsonParsing, message)))
       }).value
     }
   }
