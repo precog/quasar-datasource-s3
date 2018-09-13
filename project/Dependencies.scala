@@ -22,6 +22,8 @@ object Dependencies {
   private val circeJawnVersion = "0.9.3"
   private val fs2Version = "0.10.5"
   private val quasarVersion = IO.read(file("./quasar-version")).trim
+  private val qdataVersion = IO.read(file("./qdata-version")).trim
+  private val jawnFs2Version = "0.12.2"
   private val shimsVersion = "1.2.1"
   private val specsVersion = "4.1.2"
 
@@ -29,6 +31,8 @@ object Dependencies {
   // quasar's http4s version. The same goes for any
   // dependencies, transitive or otherwise.
   def datasourceCore = Seq(
+    "org.http4s"             %% "jawn-fs2"            % jawnFs2Version,
+    "com.slamdata"           %% "qdata-json"          % qdataVersion,
     "org.http4s"             %% "http4s-scala-xml"    % http4sVersion,
     "org.http4s"             %% "http4s-blaze-client" % http4sVersion,
     "org.scala-lang.modules" %% "scala-xml"           % scalaXmlVersion,

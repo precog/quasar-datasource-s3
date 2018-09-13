@@ -19,6 +19,7 @@ package quasar.physical.s3
 import slamdata.Predef._
 
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
+import quasar.common.data.Data
 import quasar.connector.DatasourceSpec
 import quasar.connector.ResourceError
 import quasar.contrib.scalaz.MonadError_
@@ -88,8 +89,8 @@ class S3DataSourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
   }
 
   "read line-delimited and array JSON" >>* {
-    val ld = datasourceLD.evaluate(ResourcePath.root() / ResourceName("testData") / ResourceName("lines.json"))
-    val array = datasource.evaluate(ResourcePath.root() / ResourceName("testData") / ResourceName("array.json"))
+    val ld = datasourceLD.evaluator[Data].evaluate(ResourcePath.root() / ResourceName("testData") / ResourceName("lines.json"))
+    val array = datasource.evaluator[Data].evaluate(ResourcePath.root() / ResourceName("testData") / ResourceName("array.json"))
 
     (ld |@| array).tupled.flatMap {
       case (readLD, readArray) => {
