@@ -17,11 +17,10 @@
 package quasar.physical.s3
 package impl
 
-import quasar.common.data.Data
+import quasar.api.resource.ResourcePath
+import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.contrib.pathy._
 import quasar.physical.s3.S3JsonParsing
-import quasar.connector.{MonadResourceErr, ResourceError}
-import quasar.api.resource.ResourcePath
 
 import slamdata.Predef._
 
@@ -30,34 +29,69 @@ import cats.effect.{Effect, Timer, Sync}
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
 import cats.syntax.option._
+
 import fs2.{Pipe, Stream}
-import io.circe.{Json, ParsingFailure}
-import io.circe.fs2.{byteArrayParser, byteStreamParser}
+import jawn.{Facade, ParseException}
+import jawnfs2._
 import org.http4s.client._
 import org.http4s.{Request, Response, Status, Uri}
 import pathy.Path
 import shims._
 
 object evaluate {
-  // circe's streaming parser, which we select based on the
-  // passed S3JsonParsing
-  private def circePipe[F[_]](jsonParsing: S3JsonParsing): Pipe[F, Byte, Json] = jsonParsing match {
-    case S3JsonParsing.JsonArray => byteArrayParser[F]
-    case S3JsonParsing.LineDelimited => byteStreamParser[F]
+
+  def apply[F[_]: Effect: Timer, R: Facade](
+      jsonParsing: S3JsonParsing,
+      client: Client[F],
+      uri: Uri,
+      file: AFile,
+      sign: Request[F] => F[Request[F]])
+      (implicit MR: MonadResourceErr[F])
+      : F[Option[Stream[F, R]]] = {
+    // Convert the pathy Path to a POSIX path, dropping
+    // the first slash, which is what S3 expects for object paths
+    val objectPath = Path.posixCodec.printPath(file).drop(1)
+
+    // Put the object path after the bucket URI
+    val queryUri = appendPathUnencoded(uri, objectPath)
+    val request = Request[F](uri = queryUri)
+
+    sign(request) >>= { req =>
+      val stream = OptionT(
+        streamRequest[F, R](client, req) { resp =>
+          resp.body.chunks.map(_.toByteBuffer).through(parse(jsonParsing))
+        })
+
+      stream.map(_.handleErrorWith {
+        case ParseException(message, _, _, _) =>
+          Stream.eval(MR.raiseError(parseError(file, jsonParsing, message)))
+      }).value
+    }
   }
 
-  // as it says on the tin, converts circe's JSON type to
-  // quasar's Data type
-  @SuppressWarnings(Array("org.wartremover.warts.Recursion"))
-  private def circeJsonToData(json: Json): Data = {
-    json.fold(
-      Data.Null,
-      Data.Bool,
-      n => Data.Dec(n.toBigDecimal.getOrElse(n.toDouble)),
-      Data.Str,
-      js => Data.Arr(js.map(circeJsonToData)(scala.collection.breakOut)),
-      js => Data.Obj(ListMap(js.toList.map { case (k, v) => k -> circeJsonToData(v) }: _*))
-    )
+  ////
+
+  private def parse[F[_], R: Facade](jsonParsing: S3JsonParsing)
+      : Pipe[F, ByteBuffer, R] =
+    jsonParsing match {
+      case S3JsonParsing.JsonArray => unwrapJsonArray[F, ByteBuffer, R]
+      case S3JsonParsing.LineDelimited => parseJsonStream[F, ByteBuffer, R]
+    }
+
+  private def parseError(path: AFile, parsing: S3JsonParsing, message: String)
+      : ResourceError = {
+    val msg: String =
+      s"Could not parse the file as JSON. Ensure you've configured the correct jsonParsing option for this bucket: $message"
+
+    val expectedFormat: String = parsing match {
+      case S3JsonParsing.LineDelimited => "Newline-delimited JSON"
+      case S3JsonParsing.JsonArray => "Array-wrapped JSON"
+    }
+
+    ResourceError.malformedResource(
+      ResourcePath.Leaf(path),
+      expectedFormat,
+      msg)
   }
 
   // there is no method in http4s 0.16.6a that does what we
@@ -67,7 +101,10 @@ object evaluate {
   // if it's `Some(resp)` we compute an fs2 stream from
   // it using `f` and then call `dispose` on that response
   // once we've finished streaming.
-  private def streamRequestThroughFs2[F[_]: Sync, A](client: Client[F], req: Request[F])(f: Response[F] => Stream[F, A]): F[Option[Stream[F, A]]] = {
+  private def streamRequest[F[_]: Sync, A](
+      client: Client[F], req: Request[F])(
+      f: Response[F] => Stream[F, A])
+      : F[Option[Stream[F, A]]] =
     client.open(req).flatMap {
       case DisposableResponse(response, dispose) =>
         response.status match {
@@ -76,59 +113,4 @@ object evaluate {
           case s => Sync[F].raiseError(new Exception(s"Unexpected status $s"))
         }
     }
-  }
-
-  private def noParseError(path: AFile, parsing: S3JsonParsing, message: String): ResourceError = {
-    val noParseMsg = s"Could not parse the file as JSON. Ensure you've configured the correct jsonParsing option for this bucket: $message"
-    val expectedFormat = parsing match {
-      case S3JsonParsing.LineDelimited => "Newline-delimited JSON"
-      case S3JsonParsing.JsonArray => "Array-wrapped JSON"
-    }
-
-    ResourceError.malformedResource(
-      ResourcePath.Leaf(path),
-      expectedFormat,
-      noParseMsg)
-  }
-
-  // putting it all together.
-  def apply[F[_]: Effect: Timer](
-    jsonParsing: S3JsonParsing,
-    client: Client[F],
-    uri: Uri,
-    file: AFile,
-    sign: Request[F] => F[Request[F]])
-    (implicit MR: MonadResourceErr[F])
-      : F[Option[Stream[F, Data]]] = {
-    // convert the pathy Path to a POSIX path, dropping
-    // the first slash, like S3 expects for object paths
-    val objectPath = Path.posixCodec.printPath(file).drop(1)
-
-    // Put the object path after the bucket URI
-    val queryUri = appendPathUnencoded(uri, objectPath)
-    val request = Request[F](uri = queryUri)
-
-    // figure out how we're going to parse the object as JSON
-    val circeJsonPipe = circePipe[F](jsonParsing)
-
-    sign(request) >>= { r =>
-      val stream =
-        OptionT(streamRequestThroughFs2[F, Data](client, r) { resp =>
-          // convert the data to JSON, using the parsing method
-          // of our choice
-          val asJson: Stream[F, Json] = resp.body.through(circeJsonPipe)
-
-          // convert the JSON from circe's representation to ours
-          val asData: Stream[F, Data] = asJson.map(circeJsonToData)
-
-          // and we're done.
-          asData
-        })
-
-      stream.map(_.handleErrorWith {
-        case ParsingFailure(message, _) =>
-          Stream.eval(MR.raiseError(noParseError(file, jsonParsing, message)))
-      }).value
-    }
-  }
 }

@@ -16,10 +16,10 @@
 
 package quasar.physical.s3
 
+import quasar.api.QueryEvaluator
 import quasar.api.datasource.DatasourceType
 import quasar.api.resource.ResourcePath.{Leaf, Root}
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
-import quasar.common.data.Data
 import quasar.connector.MonadResourceErr
 import quasar.connector.datasource.LightweightDatasource
 import quasar.contrib.pathy.APath
@@ -33,10 +33,13 @@ import cats.effect.{Effect, Timer}
 import cats.syntax.flatMap._
 import cats.syntax.option._
 import fs2.Stream
+import jawn.Facade
 import org.http4s.{Request, Header, Headers}
 import org.http4s.client.Client
 import pathy.Path
 import pathy.Path.{DirName, FileName}
+import qdata.QDataEncode
+import qdata.json.QDataFacade
 import scalaz.syntax.applicative._
 import scalaz.{\/-, -\/, OptionT}
 import shims._
@@ -44,17 +47,22 @@ import shims._
 final class S3DataSource[F[_]: Effect: Timer: MonadResourceErr](
   client: Client[F],
   config: S3Config)
-    extends LightweightDatasource[F, Stream[F, ?], Stream[F, Data]] {
+    extends LightweightDatasource[F, Stream[F, ?]] {
   def kind: DatasourceType = s3.datasourceKind
 
-  def evaluate(path: ResourcePath): F[Stream[F, Data]] =
-    path match {
-      case Root =>
-        Stream.empty.covaryAll[F, Data].pure[F]
-      case Leaf(file) =>
-        impl.evaluate[F](config.parsing, client, config.bucket, file, signRequest(config)) map {
-          case None => Stream.empty
-          case Some(s) => s
+  def evaluator[R: QDataEncode]: QueryEvaluator[F, ResourcePath, Stream[F, R]] =
+    new QueryEvaluator[F, ResourcePath, Stream[F, R]] {
+      implicit val facade: Facade[R] = QDataFacade.qdata[R]
+
+      def evaluate(path: ResourcePath): F[Stream[F, R]] =
+        path match {
+          case Root =>
+            Stream.empty.covaryAll[F, R].pure[F]
+          case Leaf(file) =>
+            impl.evaluate[F, R](config.parsing, client, config.bucket, file, signRequest(config)) map {
+              case None => Stream.empty
+              case Some(s) => s
+            }
         }
     }
 
