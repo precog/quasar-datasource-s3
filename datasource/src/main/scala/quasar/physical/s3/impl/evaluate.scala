@@ -25,7 +25,7 @@ import quasar.physical.s3.S3JsonParsing
 import slamdata.Predef._
 
 import cats.data.OptionT
-import cats.effect.{Effect, Timer, Sync}
+import cats.effect.{Effect, Sync}
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
 import cats.syntax.option._
@@ -40,7 +40,7 @@ import shims._
 
 object evaluate {
 
-  def apply[F[_]: Effect: Timer, R: Facade](
+  def apply[F[_]: Effect, R: Facade](
       jsonParsing: S3JsonParsing,
       client: Client[F],
       uri: Uri,

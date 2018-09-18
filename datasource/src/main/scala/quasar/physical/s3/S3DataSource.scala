@@ -27,9 +27,9 @@ import quasar.contrib.pathy.APath
 import scala.concurrent.duration.SECONDS
 import slamdata.Predef.{Stream => _, _}
 
-import java.time.{ZoneOffset, LocalDateTime}
+import java.time.{OffsetDateTime, ZoneOffset, LocalDateTime}
 
-import cats.effect.{Effect, Timer}
+import cats.effect.Effect
 import cats.syntax.flatMap._
 import cats.syntax.option._
 import fs2.Stream
@@ -44,7 +44,7 @@ import scalaz.syntax.applicative._
 import scalaz.{\/-, -\/, OptionT}
 import shims._
 
-final class S3DataSource[F[_]: Effect: Timer: MonadResourceErr](
+final class S3DataSource[F[_]: Effect: MonadResourceErr](
   client: Client[F],
   config: S3Config)
     extends LightweightDatasource[F, Stream[F, ?]] {
@@ -106,12 +106,13 @@ final class S3DataSource[F[_]: Effect: Timer: MonadResourceErr](
 }
 
 object S3DataSource {
-  def signRequest[F[_]: Effect: Timer](c: S3Config): Request[F] => F[Request[F]] =
+  def signRequest[F[_]: Effect](c: S3Config): Request[F] => F[Request[F]] =
     c.credentials match {
       case Some(creds) => {
         val requestSigning = for {
-          seconds <- Timer[F].clockRealTime(SECONDS)
-          datetime <- Effect[F].catchNonFatal(LocalDateTime.ofEpochSecond(seconds, 0, ZoneOffset.UTC))
+          time <- Effect[F].delay(OffsetDateTime.now())
+          datetime <- Effect[F].catchNonFatal(
+            LocalDateTime.ofEpochSecond(time.toEpochSecond, 0, ZoneOffset.UTC))
           signing = RequestSigning(
             Credentials(creds.accessKey, creds.secretKey, None),
             creds.region,
