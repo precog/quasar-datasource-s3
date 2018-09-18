@@ -21,7 +21,6 @@ import slamdata.Predef._
 import quasar.connector.ResourceError
 import quasar.contrib.scalaz.MonadError_
 
-import scala.concurrent.ExecutionContext.Implicits.global
 import scala.io.{Source, Codec}
 
 import java.io.File

@@ -24,10 +24,8 @@ import quasar.connector.DatasourceSpec
 import quasar.connector.ResourceError
 import quasar.contrib.scalaz.MonadError_
 
-import scala.concurrent.ExecutionContext.Implicits.global
-
+import cats.data.{EitherT, OptionT}
 import cats.effect.IO
-import cats.data.OptionT
 import fs2.Stream
 import org.http4s.Uri
 import org.http4s.client.blaze.Http1Client
@@ -107,6 +105,21 @@ class S3DataSourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
     }
   }
 
+  "reading a non-existent file raises ResourceError.PathNotFound" >> {
+    val path = ResourcePath.root() / ResourceName("does-not-exist")
+
+    val ds = Http1Client[G]().map(client => new S3DataSource[G](
+      client,
+      S3Config(
+        Uri.uri("https://s3.amazonaws.com/slamdata-public-test"),
+        S3JsonParsing.JsonArray,
+        None)))
+
+    val read: Stream[G, Data] = Stream.force(ds.flatMap(_.evaluator[Data].evaluate(path)))
+
+    read.compile.toList.value.unsafeRunSync must beLeft
+  }
+
   "list a file with special characters in it" >>* {
     OptionT(datasource.prefixedChildPaths(ResourcePath.root() / ResourceName("dir1")))
       .getOrElseF(IO.raiseError(new Exception(s"Failed to list resources under dir1")))
@@ -139,6 +152,11 @@ class S3DataSourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
 }
 
 object S3DataSourceSpec {
+  type G[A] = EitherT[IO, Throwable, A]
+
   implicit val ioMonadResourceErr: MonadError_[IO, ResourceError] =
     MonadError_.facet[IO](ResourceError.throwableP)
+
+  implicit val eitherTMonadResourceErr: MonadError_[G, ResourceError] =
+    MonadError_.facet[G](ResourceError.throwableP)
 }

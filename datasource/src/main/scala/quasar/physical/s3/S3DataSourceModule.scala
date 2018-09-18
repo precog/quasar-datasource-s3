@@ -30,7 +30,7 @@ import quasar.connector.LightweightDatasourceModule
 import quasar.connector.MonadResourceErr
 
 import argonaut.{EncodeJson, Json}
-import cats.effect.ConcurrentEffect
+import cats.effect.{ConcurrentEffect, Timer}
 import fs2.Stream
 import org.http4s.client.blaze.Http1Client
 import scalaz.{\/, NonEmptyList}
@@ -44,7 +44,7 @@ import slamdata.Predef.{Stream => _, _}
 object S3DataSourceModule extends LightweightDatasourceModule {
   def kind: DatasourceType = s3.datasourceKind
 
-  def lightweightDatasource[F[_]: ConcurrentEffect: MonadResourceErr](config: Json)
+  def lightweightDatasource[F[_]: ConcurrentEffect: MonadResourceErr: Timer](config: Json)
       : F[InitializationError[Json] \/ Disposable[F, Datasource[F, Stream[F, ?], ResourcePath]]] = {
     config.as[S3Config].result match {
       case Right(s3Config) => {
