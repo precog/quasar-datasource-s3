@@ -25,7 +25,6 @@ import quasar.connector.datasource.LightweightDatasource
 import quasar.contrib.pathy.APath
 import quasar.contrib.scalaz.MonadError_
 
-import scala.concurrent.duration.SECONDS
 import slamdata.Predef.{Stream => _, _}
 
 import java.time.{OffsetDateTime, ZoneOffset, LocalDateTime}
