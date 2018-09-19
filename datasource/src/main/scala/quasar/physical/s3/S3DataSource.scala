@@ -30,7 +30,9 @@ import slamdata.Predef.{Stream => _, _}
 import java.time.{ZoneOffset, LocalDateTime}
 
 import cats.effect.{Effect, Timer}
+import cats.syntax.applicative._
 import cats.syntax.flatMap._
+import cats.syntax.functor._
 import cats.syntax.option._
 import fs2.Stream
 import jawn.Facade
@@ -40,7 +42,6 @@ import pathy.Path
 import pathy.Path.{DirName, FileName}
 import qdata.QDataEncode
 import qdata.json.QDataFacade
-import scalaz.syntax.applicative._
 import scalaz.{\/-, -\/, OptionT}
 import shims._
 
@@ -127,7 +128,7 @@ object S3DataSource {
             case None => req
           }
 
-          requestSigning >>= (s => s.signedHeaders[F](req0).map(h => req0.withHeaders(h)))
+          requestSigning >>= (_.signedHeaders[F](req0).map(req0.withHeaders(_)))
         }
       }
       case None => req => req.pure[F]

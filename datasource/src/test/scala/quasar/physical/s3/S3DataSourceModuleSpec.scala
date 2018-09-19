@@ -18,7 +18,7 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 
-import quasar.api.datasource.DatasourceError.InvalidConfiguration
+import quasar.api.datasource.DatasourceError.AccessDenied
 import quasar.connector.ResourceError
 import quasar.contrib.scalaz.MonadError_
 
@@ -41,7 +41,7 @@ class S3DataSourceModuleSpec extends Specification {
     val ds = S3DataSourceModule.lightweightDatasource[IO](conf).unsafeRunSync.toEither
 
     ds must beLike {
-      case Left(InvalidConfiguration(_, _, _)) => ok
+      case Left(AccessDenied(_, _, _)) => ok
     }
   }
 
@@ -53,7 +53,7 @@ class S3DataSourceModuleSpec extends Specification {
     val ds = S3DataSourceModule.lightweightDatasource[IO](conf).unsafeRunSync.toEither
 
     ds must beLike {
-      case Left(InvalidConfiguration(_, _, _)) => ok
+      case Left(AccessDenied(_, _, _)) => ok
     }
   }
 
