@@ -18,11 +18,8 @@ package quasar.physical.s3
 
 
 import quasar.Disposable
-import quasar.api.datasource.DatasourceError.{
-  InitializationError,
-  InvalidConfiguration,
-  MalformedConfiguration
-}
+import quasar.api.datasource.DatasourceError
+import quasar.api.datasource.DatasourceError.InitializationError
 import quasar.api.datasource.DatasourceType
 import quasar.api.resource.ResourcePath
 import quasar.connector.Datasource
@@ -35,9 +32,9 @@ import fs2.Stream
 import org.http4s.client.blaze.Http1Client
 import scalaz.{\/, NonEmptyList}
 import scalaz.syntax.either._
-import scalaz.syntax.applicative._
-import scalaz.syntax.bind._
-import scalaz.syntax.std.option._
+import cats.syntax.applicative._
+import cats.syntax.flatMap._
+import cats.syntax.option._
 import shims._
 import slamdata.Predef.{Stream => _, _}
 
@@ -53,22 +50,22 @@ object S3DataSourceModule extends LightweightDatasourceModule {
           val ds: Datasource[F, Stream[F, ?], ResourcePath] = s3Ds
 
           s3Ds.isLive.ifM({
-            val disposable = Disposable(ds, client.shutdown)
-
-            disposable.right[InitializationError[Json]].point[F]
-          }, {
+            Disposable(ds, client.shutdown).right.pure[F]
+          },
+          {
             val msg = "Unable to ListObjects at the root of the bucket"
-            val err: InitializationError[Json] =
-              InvalidConfiguration(s3.datasourceKind, config, NonEmptyList(msg))
 
-            err.left[Disposable[F, Datasource[F, Stream[F, ?], ResourcePath]]].point[F]
+            DatasourceError
+              .accessDenied[Json, InitializationError[Json]](kind, config, msg)
+              .left.pure[F]
           })
         }
       }
 
       case Left((msg, _)) =>
-        (MalformedConfiguration(kind, config, msg): InitializationError[Json])
-          .left[Disposable[F, Datasource[F, Stream[F, ?], ResourcePath]]].point[F]
+        DatasourceError
+          .invalidConfiguration[Json, InitializationError[Json]](kind, config, NonEmptyList(msg))
+          .left.pure[F]
     }
   }
 
