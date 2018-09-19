@@ -30,25 +30,17 @@ import cats.effect.{IO, Sync}
 import cats.syntax.flatMap._
 import cats.syntax.applicative._
 import org.http4s.Uri
-import org.http4s.client.blaze.Http1Client
 import shims._
 
 import SecureS3DataSourceSpec._
 
 final class SecureS3DataSourceSpec extends S3DataSourceSpec {
-  override val datasourceLD = new S3DataSource[IO](
-    Http1Client[IO]().unsafeRunSync,
-    S3Config(
-      Uri.uri("https://s3.amazonaws.com/slamdata-private-test"),
-      S3JsonParsing.LineDelimited,
-      Some(readCredentials.unsafeRunSync)))
+  override val testBucket = Uri.uri("https://s3.amazonaws.com/slamdata-private-test")
 
-  override val datasource = new S3DataSource[IO](
-    Http1Client[IO]().unsafeRunSync,
-    S3Config(
-      Uri.uri("https://s3.amazonaws.com/slamdata-private-test"),
-      S3JsonParsing.JsonArray,
-      Some(readCredentials.unsafeRunSync)))
+  override val datasourceLD =
+    run(readCredentials.flatMap(creds => mkDatasource[IO](S3JsonParsing.LineDelimited, testBucket, Some(creds))))
+  override val datasource =
+    run(readCredentials.flatMap(creds => mkDatasource[IO](S3JsonParsing.JsonArray, testBucket, Some(creds))))
 
   // FIXME: close the file once we update to cats-effect 1.0.0 and
   // Bracket is available
