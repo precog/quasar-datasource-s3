@@ -89,26 +89,25 @@ class S3DataSourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
   }
 
   "evaluate" >> {
+    "read line-delimited JSON" >>* {
+      assertEvaluate(
+        datasourceLD,
+        ResourcePath.root() / ResourceName("testData") / ResourceName("lines.json"),
+        data_12_34)
+    }
 
-    "read line-delimited and array JSON" >>* {
-      val ld = datasourceLD.evaluator[Data].evaluate(ResourcePath.root() / ResourceName("testData") / ResourceName("lines.json"))
-      val array = datasource.evaluator[Data].evaluate(ResourcePath.root() / ResourceName("testData") / ResourceName("array.json"))
-
-      (ld |@| array).tupled.flatMap {
-        case (readLD, readArray) => {
-          val rd = readLD.compile.toList
-          val ra = readArray.compile.toList
-
-          (rd |@| ra) {
-            case (lines, array) => {
-              lines(0) must_= array(0)
-              lines(1) must_= array(1)
-            }
-          }
-        }
-      }
+    "read array JSON" >>* {
+      assertEvaluate(
+        datasource,
+        ResourcePath.root() / ResourceName("testData") / ResourceName("array.json"),
+        data_12_34)
     }
   }
+
+  def assertEvaluate(ds: S3DataSource[IO], path: ResourcePath, expected: List[Data]) =
+    ds.evaluator[Data].evaluate(path).flatMap { res =>
+      res.compile.toList.map { _ must_== expected }
+    }
 
   def assertPrefixedChildPaths(path: ResourcePath, expected: List[(ResourceName, ResourcePathType)]) =
     OptionT(datasource.prefixedChildPaths(path))
@@ -116,6 +115,8 @@ class S3DataSourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
       .flatMap(_.compile.toList).map { _ must_== expected }
 
   def gatherMultiple[A](g: Stream[IO, A]) = g.compile.toList
+
+  val data_12_34 = List(Data.Arr(List(Data.Int(1), Data.Int(2))), Data.Arr(List(Data.Int(3), Data.Int(4))))
 
   val datasourceLD = new S3DataSource[IO](
     Http1Client[IO]().unsafeRunSync,
