@@ -31,7 +31,6 @@ import cats.data.OptionT
 import fs2.Stream
 import org.http4s.Uri
 import org.http4s.client.blaze.Http1Client
-import scalaz.syntax.applicative._
 import scalaz.{Id, ~>}, Id.Id
 import shims._
 
