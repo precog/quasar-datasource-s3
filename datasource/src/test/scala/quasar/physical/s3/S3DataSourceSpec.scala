@@ -38,83 +38,82 @@ import shims._
 import S3DataSourceSpec._
 
 class S3DataSourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
-  "the root of a bucket with a trailing slash is not a resource" >>* {
-    val root = ResourcePath.root() / ResourceName("")
-    datasource.pathIsResource(root).map(_ must beFalse)
-  }
+  "pathIsResource" >> {
+    "the root of a bucket with a trailing slash is not a resource" >>* {
+      val root = ResourcePath.root() / ResourceName("")
+      datasource.pathIsResource(root).map(_ must beFalse)
+    }
 
-  "the root of a bucket is not a resource" >>* {
-    val root = ResourcePath.root()
-    datasource.pathIsResource(root).map(_ must beFalse)
-  }
+    "the root of a bucket is not a resource" >>* {
+      val root = ResourcePath.root()
+      datasource.pathIsResource(root).map(_ must beFalse)
+    }
 
-  "a prefix without contents is not a resource" >>* {
-    val path = ResourcePath.root() / ResourceName("prefix3") / ResourceName("subprefix5")
-    datasource.pathIsResource(path).map(_ must beFalse)
-  }
+    "a prefix without contents is not a resource" >>* {
+      val path = ResourcePath.root() / ResourceName("prefix3") / ResourceName("subprefix5")
+      datasource.pathIsResource(path).map(_ must beFalse)
+    }
 
-  "list nested children" >>* {
-    val path = ResourcePath.root() / ResourceName("dir1") / ResourceName("dir2") / ResourceName("dir3")
+    "an actual file is a resource" >>* {
+      val res = ResourcePath.root() / ResourceName("testData") / ResourceName("array.json")
 
-    val listing = datasource.prefixedChildPaths(path)
-
-    listing.flatMap { list =>
-      list.map(_.compile.toList)
-        .getOrElse(IO.raiseError(new Exception("Could not list nested children under dir1/dir2/dir3")))
-        .map {
-          case List((resource, resourceType)) =>
-            resource must_= ResourceName("flattenable.data")
-            resourceType must_= ResourcePathType.leafResource
-        }
+      datasource.pathIsResource(res) map (_ must beTrue)
     }
   }
 
-  "list children at the root of the bucket" >>* {
-    datasource.prefixedChildPaths(ResourcePath.root()).flatMap { list =>
-      list.map(_.compile.toList).getOrElse(IO.raiseError(new Exception("Could not list children under the root")))
-        .map(resources => {
-          resources.length must_== 4
-          resources(0) must_== (ResourceName("dir1") -> ResourcePathType.prefix)
-          resources(1) must_== (ResourceName("extraSmallZips.data") -> ResourcePathType.leafResource)
-          resources(2) must_== (ResourceName("prefix3") -> ResourcePathType.prefix)
-          resources(3) must_== (ResourceName("testData") -> ResourcePathType.prefix)
-        })
+  "prefixedChildPaths" >> {
+
+    "list nested children" >>* {
+      assertPrefixedChildPaths(
+        ResourcePath.root() / ResourceName("dir1") / ResourceName("dir2") / ResourceName("dir3"),
+        List(ResourceName("flattenable.data") -> ResourcePathType.leafResource))
+    }
+
+    "list children at the root of the bucket" >>* {
+      assertPrefixedChildPaths(
+        ResourcePath.root(),
+        List(
+          ResourceName("dir1") -> ResourcePathType.prefix,
+          ResourceName("extraSmallZips.data") -> ResourcePathType.leafResource,
+          ResourceName("prefix3") -> ResourcePathType.prefix,
+          ResourceName("testData") -> ResourcePathType.prefix))
+    }
+
+    "list a file with special characters in it" >>* {
+      assertPrefixedChildPaths(
+        ResourcePath.root() / ResourceName("dir1"),
+        List(
+          ResourceName("dir2") -> ResourcePathType.prefix,
+          ResourceName("fóóbar.ldjson") -> ResourcePathType.leafResource))
     }
   }
 
-  "an actual file is a resource" >>* {
-    val res = ResourcePath.root() / ResourceName("testData") / ResourceName("array.json")
+  "evaluate" >> {
 
-    datasource.pathIsResource(res) map (_ must beTrue)
-  }
+    "read line-delimited and array JSON" >>* {
+      val ld = datasourceLD.evaluator[Data].evaluate(ResourcePath.root() / ResourceName("testData") / ResourceName("lines.json"))
+      val array = datasource.evaluator[Data].evaluate(ResourcePath.root() / ResourceName("testData") / ResourceName("array.json"))
 
-  "read line-delimited and array JSON" >>* {
-    val ld = datasourceLD.evaluator[Data].evaluate(ResourcePath.root() / ResourceName("testData") / ResourceName("lines.json"))
-    val array = datasource.evaluator[Data].evaluate(ResourcePath.root() / ResourceName("testData") / ResourceName("array.json"))
+      (ld |@| array).tupled.flatMap {
+        case (readLD, readArray) => {
+          val rd = readLD.compile.toList
+          val ra = readArray.compile.toList
 
-    (ld |@| array).tupled.flatMap {
-      case (readLD, readArray) => {
-        val rd = readLD.compile.toList
-        val ra = readArray.compile.toList
-
-        (rd |@| ra) {
-          case (lines, array) => {
-            lines(0) must_= array(0)
-            lines(1) must_= array(1)
+          (rd |@| ra) {
+            case (lines, array) => {
+              lines(0) must_= array(0)
+              lines(1) must_= array(1)
+            }
           }
         }
       }
     }
   }
 
-  "list a file with special characters in it" >>* {
-    OptionT(datasource.prefixedChildPaths(ResourcePath.root() / ResourceName("dir1")))
-      .getOrElseF(IO.raiseError(new Exception(s"Failed to list resources under dir1")))
-      .flatMap(_.compile.toList).map { results =>
-        results(0) must_== (ResourceName("dir2") -> ResourcePathType.prefix)
-        results(1) must_== (ResourceName("fóóbar.ldjson") -> ResourcePathType.leafResource)
-      }
-  }
+  def assertPrefixedChildPaths(path: ResourcePath, expected: List[(ResourceName, ResourcePathType)]) =
+    OptionT(datasource.prefixedChildPaths(path))
+      .getOrElseF(IO.raiseError(new Exception(s"Failed to list resources under $path")))
+      .flatMap(_.compile.toList).map { _ must_== expected }
 
   def gatherMultiple[A](g: Stream[IO, A]) = g.compile.toList
 
