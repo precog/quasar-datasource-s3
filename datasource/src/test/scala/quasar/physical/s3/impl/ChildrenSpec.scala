@@ -18,8 +18,6 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 
-import scala.concurrent.ExecutionContext.Implicits.global
-
 import cats.effect.IO
 import cats.data.OptionT
 import cats.syntax.applicative._

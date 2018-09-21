@@ -20,7 +20,7 @@ import quasar.contrib.pathy._
 
 import slamdata.Predef._
 
-import cats.effect.{Effect, Timer}
+import cats.effect.Effect
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
 import org.http4s.client.Client
@@ -31,7 +31,7 @@ import pathy.Path
 // The simplest method to implement, check that HEAD doesn't
 // give a 404.
 object isResource {
-  def apply[F[_]: Effect: Timer](client: Client[F], uri: Uri, file: AFile, sign: Request[F] => F[Request[F]]): F[Boolean] = {
+  def apply[F[_]: Effect](client: Client[F], uri: Uri, file: AFile, sign: Request[F] => F[Request[F]]): F[Boolean] = {
 
     // Print pathy.Path as POSIX path, without leading slash,
     // for S3's consumption.

@@ -25,7 +25,7 @@ import quasar.contrib.pathy._
 import quasar.physical.s3.S3Error
 
 import cats.data.{EitherT, OptionT}
-import cats.effect.{Sync, Timer, Effect}
+import cats.effect.{Sync, Effect}
 import cats.instances.either._
 import cats.instances.int._
 import cats.instances.list._
@@ -62,7 +62,7 @@ object children {
   // sends them in.
   //
   // FIXME: dir should be ADir and pathToDir should be deleted
-  def apply[F[_]: Effect: Timer](
+  def apply[F[_]: Effect](
     client: Client[F],
     bucket: Uri,
     dir: APath,
@@ -99,7 +99,7 @@ object children {
 
   // FIXME parse the results as they arrive using an XML streaming parser, instead of paging
   // one response at a time
-  private def fetchResults[F[_]: Effect: Timer](
+  private def fetchResults[F[_]: Effect](
     client: Client[F],
     bucket: Uri,
     dir: APath,
@@ -116,7 +116,7 @@ object children {
       .flatMap(p => Stream.emits(Path.peel(p).toList))
       .map(_._2)
 
-  private def listObjects[F[_]: Effect: Timer](
+  private def listObjects[F[_]: Effect](
     client: Client[F],
     bucket: Uri,
     dir: APath,

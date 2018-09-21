@@ -20,14 +20,14 @@ import slamdata.Predef._
 
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.common.data.Data
-import quasar.connector.DatasourceSpec
+import quasar.connector.{Datasource, DatasourceSpec, MonadResourceErr, ResourceError}
 import quasar.connector.ResourceError
 import quasar.contrib.scalaz.MonadError_
 
-import scala.concurrent.ExecutionContext.Implicits.global
-
-import cats.effect.IO
-import cats.data.OptionT
+import cats.data.{EitherT, OptionT}
+import cats.effect.{Effect, IO}
+import cats.syntax.applicative._
+import cats.syntax.functor._
 import fs2.Stream
 import org.http4s.Uri
 import org.http4s.client.blaze.Http1Client
@@ -37,6 +37,10 @@ import shims._
 import S3DataSourceSpec._
 
 class S3DataSourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
+  val testBucket = Uri.uri("https://s3.amazonaws.com/slamdata-public-test")
+  val nonExistentPath =
+    ResourcePath.root() / ResourceName("does") / ResourceName("not") / ResourceName("exist")
+
   "pathIsResource" >> {
     "the root of a bucket with a trailing slash is not a resource" >>* {
       val root = ResourcePath.root() / ResourceName("")
@@ -101,43 +105,56 @@ class S3DataSourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
         ResourcePath.root() / ResourceName("testData") / ResourceName("array.json"),
         data_12_34)
     }
+
+    "reading a non-existent file raises ResourceError.PathNotFound" >> {
+      val creds = EitherT.right[Throwable](credentials)
+      val ds = creds.flatMap(c => mkDatasource[G](S3JsonParsing.JsonArray, testBucket, c))
+
+      val path = ResourcePath.root() / ResourceName("does-not-exist")
+      val read: Stream[G, Data] = Stream.force(ds.flatMap(_.evaluator[Data].evaluate(path)))
+
+      read.compile.toList.value.unsafeRunSync must beLeft.like {
+        case ResourceError.throwableP(ResourceError.PathNotFound(_)) => ok
+      }
+    }
   }
 
-  def assertEvaluate(ds: S3DataSource[IO], path: ResourcePath, expected: List[Data]) =
+  def assertEvaluate(ds: Datasource[IO, Stream[IO,?], ResourcePath], path: ResourcePath, expected: List[Data]) =
     ds.evaluator[Data].evaluate(path).flatMap { res =>
-      res.compile.toList.map { _ must_== expected }
+      gatherMultiple(res).map { _ must_== expected }
     }
 
   def assertPrefixedChildPaths(path: ResourcePath, expected: List[(ResourceName, ResourcePathType)]) =
     OptionT(datasource.prefixedChildPaths(path))
       .getOrElseF(IO.raiseError(new Exception(s"Failed to list resources under $path")))
-      .flatMap(_.compile.toList).map { _ must_== expected }
+      .flatMap(gatherMultiple(_)).map { _ must_== expected }
 
   def gatherMultiple[A](g: Stream[IO, A]) = g.compile.toList
 
   val data_12_34 = List(Data.Arr(List(Data.Int(1), Data.Int(2))), Data.Arr(List(Data.Int(3), Data.Int(4))))
 
-  val datasourceLD = new S3DataSource[IO](
-    Http1Client[IO]().unsafeRunSync,
-    S3Config(
-      Uri.uri("https://s3.amazonaws.com/slamdata-public-test"),
-      S3JsonParsing.LineDelimited,
-      None))
-
-  val datasource = new S3DataSource[IO](
-    Http1Client[IO]().unsafeRunSync,
-    S3Config(
-      Uri.uri("https://s3.amazonaws.com/slamdata-public-test"),
-      S3JsonParsing.JsonArray,
-      None))
-
-  val nonExistentPath =
-    ResourcePath.root() / ResourceName("does") / ResourceName("not") / ResourceName("exist")
+  def credentials: IO[Option[S3Credentials]] = None.pure[IO]
 
   val run = λ[IO ~> Id](_.unsafeRunSync)
+
+  def mkDatasource[F[_]: Effect: MonadResourceErr](
+    parsing: S3JsonParsing,
+    bucket: Uri,
+    creds: Option[S3Credentials])
+      : F[Datasource[F, Stream[F, ?], ResourcePath]] =
+    Http1Client[F]().map(client =>
+     new S3DataSource[F](client, S3Config(bucket, parsing, creds)))
+
+  val datasourceLD = run(mkDatasource[IO](S3JsonParsing.LineDelimited, testBucket, None))
+  val datasource = run(mkDatasource[IO](S3JsonParsing.JsonArray, testBucket, None))
 }
 
 object S3DataSourceSpec {
+  type G[A] = EitherT[IO, Throwable, A]
+
   implicit val ioMonadResourceErr: MonadError_[IO, ResourceError] =
     MonadError_.facet[IO](ResourceError.throwableP)
+
+  implicit val eitherTMonadResourceErr: MonadError_[G, ResourceError] =
+    MonadError_.facet[G](ResourceError.throwableP)
 }
