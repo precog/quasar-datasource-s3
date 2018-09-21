@@ -48,7 +48,7 @@ deploy:
     - ./scripts/version
   on:
     tags: false
-    #all_branches: true
+    all_branches: true
     # Omit tagged builds and publish on master and backport/*
     condition: $TRAVIS_BRANCH == "master" || $TRAVIS_BRANCH =~ backport/*
 
