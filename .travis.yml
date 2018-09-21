@@ -50,7 +50,7 @@ deploy:
     tags: false
     #all_branches: true
     # Omit tagged builds and publish on master and backport/*
-    #condition: $TRAVIS_TAG = '' && ($TRAVIS_BRANCH == "master" || $TRAVIS_BRANCH == backport/*)
+    condition: $TRAVIS_BRANCH == "master" || $TRAVIS_BRANCH =~ backport/*
 
 
 before_deploy:
