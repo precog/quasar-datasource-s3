@@ -16,9 +16,10 @@
 
 package quasar.physical.s3.impl
 
+import slamdata.Predef._
+
 import quasar.contrib.pathy._
 
-import slamdata.Predef._
 
 import cats.effect.Effect
 import cats.syntax.applicative._
@@ -38,7 +39,7 @@ object isResource {
     val objectPath = Path.posixCodec.printPath(file).drop(1)
 
     // Add the object's path to the bucket URI.
-    val queryUri = appendPathUnencoded(uri, objectPath)
+    val queryUri = appendPathS3Encoded(uri, objectPath)
 
     // Request with HEAD, to get metadata.
     // attempt to get the first byte to verify this is not empty

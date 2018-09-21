@@ -18,6 +18,9 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
+
 import cats.instances.char._
 import cats.instances.option._
 import cats.syntax.eq._
@@ -30,13 +33,21 @@ package object impl {
   private type APath = pathy.Path[pathy.Path.Abs, scala.Any, pathy.Path.Sandboxed]
 
   // This should be used instead of the `/` method from http4's Uri
-  // class since that method does URL encoding on the path, which
+  // class since that method does standard URL encoding on the path, which
   // breaks AWS request signing for S3
-  def appendPathUnencoded(uri: Uri, newSegment: Uri.Path): Uri = {
-    val newPath =
-      if (uri.path.isEmpty || uri.path.lastOption =!= Some('/')) s"${uri.path}/$newSegment"
-      else s"${uri.path}$newSegment"
+  def appendPathS3Encoded(uri: Uri, newSegment: Uri.Path): Uri = {
+    val sep =
+      if (uri.path.isEmpty || uri.path.lastOption =!= Some('/')) "/"
+      else ""
+    val newPath = s"${uri.path}$sep${s3Encode(newSegment)}"
 
     uri.withPath(newPath)
   }
+
+  // S3 specific encoding, see
+  // https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html
+  def s3Encode(s: String) =
+    URLEncoder.encode(s, StandardCharsets.UTF_8.toString)
+      .replaceAll("%2F", "/").replaceAll("\\+", "%20")
+
 }
