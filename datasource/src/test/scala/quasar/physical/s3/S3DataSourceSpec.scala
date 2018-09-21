@@ -26,10 +26,11 @@ import quasar.contrib.scalaz.MonadError_
 
 import cats.data.{EitherT, OptionT}
 import cats.effect.{Effect, IO}
+import cats.syntax.applicative._
+import cats.syntax.functor._
 import fs2.Stream
 import org.http4s.Uri
 import org.http4s.client.blaze.Http1Client
-import scalaz.syntax.applicative._
 import scalaz.{Id, ~>}, Id.Id
 import shims._
 
@@ -40,98 +41,101 @@ class S3DataSourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
   val nonExistentPath =
     ResourcePath.root() / ResourceName("does") / ResourceName("not") / ResourceName("exist")
 
+  "pathIsResource" >> {
+    "the root of a bucket with a trailing slash is not a resource" >>* {
+      val root = ResourcePath.root() / ResourceName("")
+      datasource.pathIsResource(root).map(_ must beFalse)
+    }
 
-  "the root of a bucket with a trailing slash is not a resource" >>* {
-    val root = ResourcePath.root() / ResourceName("")
-    datasource.pathIsResource(root).map(_ must beFalse)
-  }
+    "the root of a bucket is not a resource" >>* {
+      val root = ResourcePath.root()
+      datasource.pathIsResource(root).map(_ must beFalse)
+    }
 
-  "the root of a bucket is not a resource" >>* {
-    val root = ResourcePath.root()
-    datasource.pathIsResource(root).map(_ must beFalse)
-  }
+    "a prefix without contents is not a resource" >>* {
+      val path = ResourcePath.root() / ResourceName("prefix3") / ResourceName("subprefix5")
+      datasource.pathIsResource(path).map(_ must beFalse)
+    }
 
-  "a prefix without contents is not a resource" >>* {
-    val path = ResourcePath.root() / ResourceName("prefix3") / ResourceName("subprefix5")
-    datasource.pathIsResource(path).map(_ must beFalse)
-  }
+    "an actual file is a resource" >>* {
+      val res = ResourcePath.root() / ResourceName("testData") / ResourceName("array.json")
 
-  "list nested children" >>* {
-    val path = ResourcePath.root() / ResourceName("dir1") / ResourceName("dir2") / ResourceName("dir3")
-
-    val listing = datasource.prefixedChildPaths(path)
-
-    listing.flatMap { list =>
-      list.map(gatherMultiple(_))
-        .getOrElse(IO.raiseError(new Exception("Could not list nested children under dir1/dir2/dir3")))
-        .map {
-          case List((resource, resourceType)) =>
-            resource must_= ResourceName("flattenable.data")
-            resourceType must_= ResourcePathType.leafResource
-        }
+      datasource.pathIsResource(res) map (_ must beTrue)
     }
   }
 
-  "list children at the root of the bucket" >>* {
-    datasource.prefixedChildPaths(ResourcePath.root()).flatMap { list =>
-      list.map(gatherMultiple(_)).getOrElse(IO.raiseError(new Exception("Could not list children under the root")))
-        .map(resources => {
-          resources.length must_== 4
-          resources(0) must_== (ResourceName("dir1") -> ResourcePathType.prefix)
-          resources(1) must_== (ResourceName("extraSmallZips.data") -> ResourcePathType.leafResource)
-          resources(2) must_== (ResourceName("prefix3") -> ResourcePathType.prefix)
-          resources(3) must_== (ResourceName("testData") -> ResourcePathType.prefix)
-        })
+  "prefixedChildPaths" >> {
+
+    "list nested children" >>* {
+      assertPrefixedChildPaths(
+        ResourcePath.root() / ResourceName("dir1") / ResourceName("dir2") / ResourceName("dir3"),
+        List(ResourceName("flattenable.data") -> ResourcePathType.leafResource))
+    }
+
+    "list children at the root of the bucket" >>* {
+      assertPrefixedChildPaths(
+        ResourcePath.root(),
+        List(
+          ResourceName("dir1") -> ResourcePathType.prefix,
+          ResourceName("extraSmallZips.data") -> ResourcePathType.leafResource,
+          ResourceName("prefix3") -> ResourcePathType.prefix,
+          ResourceName("testData") -> ResourcePathType.prefix))
+    }
+
+    "list a file with special characters in it" >>* {
+      assertPrefixedChildPaths(
+        ResourcePath.root() / ResourceName("dir1"),
+        List(
+          ResourceName("dir2") -> ResourcePathType.prefix,
+          ResourceName("fóóbar.ldjson") -> ResourcePathType.leafResource))
     }
   }
 
-  "an actual file is a resource" >>* {
-    val res = ResourcePath.root() / ResourceName("testData") / ResourceName("array.json")
+  "evaluate" >> {
+    "read line-delimited JSON" >>* {
+      assertEvaluate(
+        datasourceLD,
+        ResourcePath.root() / ResourceName("testData") / ResourceName("lines.json"),
+        data_12_34)
+    }
 
-    datasource.pathIsResource(res) map (_ must beTrue)
-  }
+    "read array JSON" >>* {
+      assertEvaluate(
+        datasource,
+        ResourcePath.root() / ResourceName("testData") / ResourceName("array.json"),
+        data_12_34)
+    }
 
-  "read line-delimited and array JSON" >>* {
-    val ld = datasourceLD.evaluator[Data].evaluate(ResourcePath.root() / ResourceName("testData") / ResourceName("lines.json"))
-    val array = datasource.evaluator[Data].evaluate(ResourcePath.root() / ResourceName("testData") / ResourceName("array.json"))
+    "reading a non-existent file raises ResourceError.PathNotFound" >> {
+      val creds = EitherT.right[Throwable](credentials)
+      val ds = creds.flatMap(c => mkDatasource[G](S3JsonParsing.JsonArray, testBucket, c))
 
-    (ld |@| array).tupled.flatMap {
-      case (readLD, readArray) => {
-        val rd = gatherMultiple(readLD)
-        val ra = gatherMultiple(readArray)
+      val path = ResourcePath.root() / ResourceName("does-not-exist")
+      val read: Stream[G, Data] = Stream.force(ds.flatMap(_.evaluator[Data].evaluate(path)))
 
-        (rd |@| ra) {
-          case (lines, array) => {
-            lines(0) must_= array(0)
-            lines(1) must_= array(1)
-          }
-        }
+      read.compile.toList.value.unsafeRunSync must beLeft.like {
+        case ResourceError.throwableP(ResourceError.PathNotFound(_)) => ok
       }
     }
   }
 
-  "reading a non-existent file raises ResourceError.PathNotFound" >> {
-    val creds = EitherT.right[Throwable](credentials)
-    val ds = creds.flatMap(c => mkDatasource[G](S3JsonParsing.JsonArray, testBucket, c))
-
-    val path = ResourcePath.root() / ResourceName("does-not-exist")
-    val read: Stream[G, Data] = Stream.force(ds.flatMap(_.evaluator[Data].evaluate(path)))
-
-    read.compile.toList.value.unsafeRunSync must beLeft.like {
-      case ResourceError.throwableP(ResourceError.PathNotFound(_)) => ok
+  def assertEvaluate(ds: Datasource[IO, Stream[IO,?], ResourcePath], path: ResourcePath, expected: List[Data]) =
+    ds.evaluator[Data].evaluate(path).flatMap { res =>
+      gatherMultiple(res).map { _ must_== expected }
     }
-  }
 
-  "list a file with special characters in it" >>* {
-    OptionT(datasource.prefixedChildPaths(ResourcePath.root() / ResourceName("dir1")))
-      .getOrElseF(IO.raiseError(new Exception(s"Failed to list resources under dir1")))
-      .flatMap(gatherMultiple(_)).map { results =>
-        results(0) must_== (ResourceName("dir2") -> ResourcePathType.prefix)
-        results(1) must_== (ResourceName("fóóbar.ldjson") -> ResourcePathType.leafResource)
-      }
-  }
+  def assertPrefixedChildPaths(path: ResourcePath, expected: List[(ResourceName, ResourcePathType)]) =
+    OptionT(datasource.prefixedChildPaths(path))
+      .getOrElseF(IO.raiseError(new Exception(s"Failed to list resources under $path")))
+      .flatMap(gatherMultiple(_)).map { _ must_== expected }
 
   def gatherMultiple[A](g: Stream[IO, A]) = g.compile.toList
+
+  val data_12_34 = List(Data.Arr(List(Data.Int(1), Data.Int(2))), Data.Arr(List(Data.Int(3), Data.Int(4))))
+
+  def credentials: IO[Option[S3Credentials]] = None.pure[IO]
+
+  val run = λ[IO ~> Id](_.unsafeRunSync)
 
   def mkDatasource[F[_]: Effect: MonadResourceErr](
     parsing: S3JsonParsing,
@@ -139,11 +143,7 @@ class S3DataSourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
     creds: Option[S3Credentials])
       : F[Datasource[F, Stream[F, ?], ResourcePath]] =
     Http1Client[F]().map(client =>
-      new S3DataSource[F](client, S3Config(bucket, parsing, creds)))
-
-  def credentials: IO[Option[S3Credentials]] = None.pure[IO]
-
-  val run = λ[IO ~> Id](_.unsafeRunSync)
+     new S3DataSource[F](client, S3Config(bucket, parsing, creds)))
 
   val datasourceLD = run(mkDatasource[IO](S3JsonParsing.LineDelimited, testBucket, None))
   val datasource = run(mkDatasource[IO](S3JsonParsing.JsonArray, testBucket, None))
