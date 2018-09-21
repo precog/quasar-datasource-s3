@@ -21,7 +21,6 @@ import slamdata.Predef._
 import quasar.connector.ResourceError
 import quasar.contrib.scalaz.MonadError_
 
-import scala.concurrent.ExecutionContext.Implicits.global
 import scala.io.{Source, Codec}
 
 import java.io.File
@@ -30,44 +29,35 @@ import argonaut.{Parse, DecodeJson}
 import cats.effect.{IO, Sync}
 import cats.syntax.flatMap._
 import cats.syntax.applicative._
+import cats.syntax.option._
 import org.http4s.Uri
-import org.http4s.client.blaze.Http1Client
 import shims._
 
 import SecureS3DataSourceSpec._
 
 final class SecureS3DataSourceSpec extends S3DataSourceSpec {
-  override val datasourceLD = new S3DataSource[IO](
-    Http1Client[IO]().unsafeRunSync,
-    S3Config(
-      Uri.uri("https://s3.amazonaws.com/slamdata-private-test"),
-      S3JsonParsing.LineDelimited,
-      Some(readCredentials.unsafeRunSync)))
-
-  override val datasource = new S3DataSource[IO](
-    Http1Client[IO]().unsafeRunSync,
-    S3Config(
-      Uri.uri("https://s3.amazonaws.com/slamdata-private-test"),
-      S3JsonParsing.JsonArray,
-      Some(readCredentials.unsafeRunSync)))
+  override val testBucket = Uri.uri("https://s3.amazonaws.com/slamdata-private-test")
 
   // FIXME: close the file once we update to cats-effect 1.0.0 and
   // Bracket is available
-  private def readCredentials: IO[S3Credentials] = {
+  override val credentials: IO[Option[S3Credentials]] = {
     val file = Sync[IO].catchNonFatal(new File("testCredentials.json"))
     val msg = "Failed to read testCredentials.json"
 
-    val src = (file >>= (f =>
-      IO(Source.fromFile(f)(Codec.UTF8)))).map(_.getLines.mkString)
+    val src = (file >>= (f => IO(Source.fromFile(f)(Codec.UTF8)))).map(_.getLines.mkString)
 
     val jsonConfig = src >>= (p =>
-      Parse.parse(p).toOption.map(_.pure[IO])
-        .getOrElse(IO.raiseError(new Exception(msg))))
+      Parse.parse(p).toOption.map(_.pure[IO]).getOrElse(IO.raiseError(new Exception(msg))))
 
     jsonConfig
       .map(DecodeJson.of[S3Credentials].decodeJson(_))
-      .map(_.toOption) >>= (_.fold[IO[S3Credentials]](IO.raiseError(new Exception(msg)))(_.pure[IO]))
+      .map(_.toOption) >>= (_.fold[IO[Option[S3Credentials]]](IO.raiseError(new Exception(msg)))(c => c.some.pure[IO]))
   }
+
+  override val datasourceLD =
+    run(credentials >>= (creds => mkDatasource[IO](S3JsonParsing.LineDelimited, testBucket, creds)))
+  override val datasource =
+    run(credentials >>= (creds => mkDatasource[IO](S3JsonParsing.JsonArray, testBucket, creds)))
 }
 
 object SecureS3DataSourceSpec {

@@ -27,7 +27,7 @@ import quasar.connector.LightweightDatasourceModule
 import quasar.connector.MonadResourceErr
 
 import argonaut.{EncodeJson, Json}
-import cats.effect.{Timer, ConcurrentEffect}
+import cats.effect.{ConcurrentEffect, Timer}
 import fs2.Stream
 import org.http4s.client.blaze.Http1Client
 import scalaz.{\/, NonEmptyList}
