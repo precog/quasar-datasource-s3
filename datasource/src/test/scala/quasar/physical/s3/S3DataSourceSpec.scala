@@ -41,6 +41,10 @@ class S3DataSourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
   val nonExistentPath =
     ResourcePath.root() / ResourceName("does") / ResourceName("not") / ResourceName("exist")
 
+  val spanishResourcePrefix = ResourcePath.root() / ResourceName("testData") / ResourceName("El veloz murciélago hindú") / ResourceName("comía feliz cardillo y kiwi") / ResourceName("La cigüeña tocaba el saxofón")
+  val spanishResourceLeaf = ResourceName("detrás del palenque de paja")
+  val spanishResource = spanishResourcePrefix / spanishResourceLeaf
+
   "pathIsResource" >> {
     "the root of a bucket with a trailing slash is not a resource" >>* {
       val root = ResourcePath.root() / ResourceName("")
@@ -59,8 +63,16 @@ class S3DataSourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
 
     "an actual file is a resource" >>* {
       val res = ResourcePath.root() / ResourceName("testData") / ResourceName("array.json")
-
       datasource.pathIsResource(res) map (_ must beTrue)
+    }
+
+    "an actual file with special chars in path is a resource" >>* {
+      val res = ResourcePath.root() / ResourceName("testData") / ResourceName("á") / ResourceName("βç.json")
+      datasource.pathIsResource(res) map (_ must beTrue)
+    }
+
+    "an actual file with special chars in deeper path is a resource" >>* {
+      datasource.pathIsResource(spanishResource) map (_ must beTrue)
     }
   }
 
@@ -82,12 +94,18 @@ class S3DataSourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
           ResourceName("testData") -> ResourcePathType.prefix))
     }
 
-    "list a file with special characters in it" >>* {
+    "list resource with special chars" >>* {
       assertPrefixedChildPaths(
         ResourcePath.root() / ResourceName("dir1"),
         List(
           ResourceName("dir2") -> ResourcePathType.prefix,
           ResourceName("fóóbar.ldjson") -> ResourcePathType.leafResource))
+    }
+
+    "list resource with special chars in path with special chars" >>* {
+      assertPrefixedChildPaths(
+        spanishResourcePrefix,
+        List(spanishResourceLeaf -> ResourcePathType.leafResource))
     }
   }
 
@@ -104,6 +122,20 @@ class S3DataSourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
         datasource,
         ResourcePath.root() / ResourceName("testData") / ResourceName("array.json"),
         data_12_34)
+    }
+
+    "read array JSON of resource with special chars in path" >>* {
+      assertEvaluate(
+        datasource,
+        ResourcePath.root() / ResourceName("testData") / ResourceName("á") / ResourceName("βç.json"),
+        data_12_34)
+    }
+
+    "read line-delimited JSON with special chars of resource with special chars in path" >>* {
+      assertEvaluate(
+        datasourceLD,
+        spanishResource,
+        List(Data.Str("El veloz murciélago hindú comía feliz cardillo y kiwi. La cigüeña tocaba el saxofón detrás del palenque de paja.")))
     }
 
     "reading a non-existent file raises ResourceError.PathNotFound" >> {
