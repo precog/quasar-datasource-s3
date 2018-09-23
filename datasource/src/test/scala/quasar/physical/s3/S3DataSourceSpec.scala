@@ -94,12 +94,18 @@ class S3DataSourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
           ResourceName("testData") -> ResourcePathType.prefix))
     }
 
-    "list a file with special characters in it" >>* {
+    "list resource with special chars" >>* {
       assertPrefixedChildPaths(
         ResourcePath.root() / ResourceName("dir1"),
         List(
           ResourceName("dir2") -> ResourcePathType.prefix,
           ResourceName("fóóbar.ldjson") -> ResourcePathType.leafResource))
+    }
+
+    "list resource with special chars in path with special chars" >>* {
+      assertPrefixedChildPaths(
+        spanishResourcePrefix,
+        List(spanishResourceLeaf -> ResourcePathType.leafResource))
     }
   }
 
