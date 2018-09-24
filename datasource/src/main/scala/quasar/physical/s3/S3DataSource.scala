@@ -29,6 +29,7 @@ import slamdata.Predef.{Stream => _, _}
 
 import java.time.{OffsetDateTime, ZoneOffset, LocalDateTime}
 
+import cats.data.OptionT
 import cats.effect.Effect
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
@@ -42,7 +43,7 @@ import pathy.Path
 import pathy.Path.{DirName, FileName}
 import qdata.QDataEncode
 import qdata.json.QDataFacade
-import scalaz.{\/-, -\/, OptionT}
+import scalaz.{\/-, -\/}
 import shims._
 
 final class S3DataSource[F[_]: Effect: MonadResourceErr](
