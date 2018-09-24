@@ -17,12 +17,12 @@
 package quasar.physical.s3
 package impl
 
+import slamdata.Predef._
 import quasar.api.resource.ResourcePath
 import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.contrib.pathy._
 import quasar.physical.s3.S3JsonParsing
 
-import slamdata.Predef._
 
 import cats.data.OptionT
 import cats.effect.{Effect, Sync}
@@ -51,9 +51,8 @@ object evaluate {
     // Convert the pathy Path to a POSIX path, dropping
     // the first slash, which is what S3 expects for object paths
     val objectPath = Path.posixCodec.printPath(file).drop(1)
-
     // Put the object path after the bucket URI
-    val queryUri = appendPathUnencoded(uri, objectPath)
+    val queryUri = appendPathS3Encoded(uri, objectPath)
     val request = Request[F](uri = queryUri)
 
     sign(request) >>= { req =>
