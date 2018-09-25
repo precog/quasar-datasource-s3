@@ -29,8 +29,8 @@ import cats.effect.IO
 import org.specs2.mutable.Specification
 import shims._
 
-class S3DataSourceModuleSpec extends Specification {
-  import S3DataSourceModuleSpec._
+class S3DatasourceModuleSpec extends Specification {
+  import S3DatasourceModuleSpec._
 
   "rejects invalid credentials" >> {
     // slamdata-private-test is a bucket that requires credentials to access
@@ -38,7 +38,7 @@ class S3DataSourceModuleSpec extends Specification {
       "bucket" -> Json.jString("https://s3.amazonaws.com/slamdata-private-test"),
       "jsonParsing" -> Json.jString("array"))
 
-    val ds = S3DataSourceModule.lightweightDatasource[IO](conf).unsafeRunSync.toEither
+    val ds = S3DatasourceModule.lightweightDatasource[IO](conf).unsafeRunSync.toEither
 
     ds must beLike {
       case Left(AccessDenied(_, _, _)) => ok
@@ -50,7 +50,7 @@ class S3DataSourceModuleSpec extends Specification {
       "bucket" -> Json.jString("https://example.com"),
       "jsonParsing" -> Json.jString("array"))
 
-    val ds = S3DataSourceModule.lightweightDatasource[IO](conf).unsafeRunSync.toEither
+    val ds = S3DatasourceModule.lightweightDatasource[IO](conf).unsafeRunSync.toEither
 
     ds must beLike {
       case Left(AccessDenied(_, _, _)) => ok
@@ -74,7 +74,7 @@ class S3DataSourceModuleSpec extends Specification {
         "secretKey" -> Json.jString("<REDACTED>"),
         "region" -> Json.jString("<REDACTED>")))
 
-    S3DataSourceModule.sanitizeConfig(conf) must_== redactedConf
+    S3DatasourceModule.sanitizeConfig(conf) must_== redactedConf
   }
 
   "does nothing when there are no credentials to redact" >> {
@@ -82,11 +82,11 @@ class S3DataSourceModuleSpec extends Specification {
       "bucket" -> Json.jString("https://some.bucket.uri"),
       "jsonParsing" -> Json.jString("array"))
 
-    S3DataSourceModule.sanitizeConfig(conf) must_== conf
+    S3DatasourceModule.sanitizeConfig(conf) must_== conf
   }
 }
 
-object S3DataSourceModuleSpec {
+object S3DatasourceModuleSpec {
   implicit val ioMonadResourceErr: MonadError_[IO, ResourceError] =
     MonadError_.facet[IO](ResourceError.throwableP)
 }

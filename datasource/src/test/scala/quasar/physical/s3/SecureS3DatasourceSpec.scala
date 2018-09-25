@@ -33,9 +33,9 @@ import cats.syntax.option._
 import org.http4s.Uri
 import shims._
 
-import SecureS3DataSourceSpec._
+import SecureS3DatasourceSpec._
 
-final class SecureS3DataSourceSpec extends S3DataSourceSpec {
+final class SecureS3DatasourceSpec extends S3DatasourceSpec {
   override val testBucket = Uri.uri("https://s3.amazonaws.com/slamdata-private-test")
 
   // FIXME: close the file once we update to cats-effect 1.0.0 and
@@ -60,7 +60,7 @@ final class SecureS3DataSourceSpec extends S3DataSourceSpec {
     run(credentials >>= (creds => mkDatasource[IO](S3JsonParsing.JsonArray, testBucket, creds)))
 }
 
-object SecureS3DataSourceSpec {
+object SecureS3DatasourceSpec {
   implicit val ioMonadResourceErr: MonadError_[IO, ResourceError] =
     MonadError_.facet[IO](ResourceError.throwableP)
 }

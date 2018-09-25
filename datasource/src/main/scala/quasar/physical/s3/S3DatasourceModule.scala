@@ -38,7 +38,7 @@ import cats.syntax.option._
 import shims._
 import slamdata.Predef.{Stream => _, _}
 
-object S3DataSourceModule extends LightweightDatasourceModule {
+object S3DatasourceModule extends LightweightDatasourceModule {
   def kind: DatasourceType = s3.datasourceKind
 
   def lightweightDatasource[F[_]: ConcurrentEffect: MonadResourceErr: Timer](config: Json)
@@ -46,7 +46,7 @@ object S3DataSourceModule extends LightweightDatasourceModule {
     config.as[S3Config].result match {
       case Right(s3Config) => {
         Http1Client[F]() flatMap { client =>
-          val s3Ds = new S3DataSource[F](client, s3Config)
+          val s3Ds = new S3Datasource[F](client, s3Config)
           val ds: Datasource[F, Stream[F, ?], ResourcePath] = s3Ds
 
           s3Ds.isLive.ifM({
