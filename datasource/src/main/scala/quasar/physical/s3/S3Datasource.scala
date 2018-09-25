@@ -29,6 +29,7 @@ import slamdata.Predef.{Stream => _, _}
 
 import java.time.{OffsetDateTime, ZoneOffset, LocalDateTime}
 
+import cats.data.OptionT
 import cats.effect.Effect
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
@@ -42,7 +43,7 @@ import pathy.Path
 import pathy.Path.{DirName, FileName}
 import qdata.QDataEncode
 import qdata.json.QDataFacade
-import scalaz.{\/-, -\/, OptionT}
+import scalaz.{\/-, -\/}
 import shims._
 
 final class S3Datasource[F[_]: Effect: MonadResourceErr](
@@ -60,13 +61,9 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
       def evaluate(path: ResourcePath): F[Stream[F, R]] =
         path match {
           case Root =>
-            Stream.empty.covaryAll[F, R].pure[F]
+            MR.raiseError(ResourceError.notAResource(path))
           case Leaf(file) =>
-            impl.evaluate[F, R](config.parsing, client, config.bucket, file, signRequest(config)) map {
-              case None =>
-                Stream.eval(MR.raiseError(ResourceError.pathNotFound(path)))
-              case Some(s) => s
-            }
+            impl.evaluate[F, R](config.parsing, client, config.bucket, file, signRequest(config))
         }
     }
 

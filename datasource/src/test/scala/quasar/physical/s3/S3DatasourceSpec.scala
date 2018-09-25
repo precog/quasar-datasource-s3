@@ -134,12 +134,12 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
 
     "reading a non-existent file raises ResourceError.PathNotFound" >> {
       val creds = EitherT.right[Throwable](credentials)
-      val ds = creds.flatMap(c => mkDatasource[G](S3JsonParsing.JsonArray, testBucket, c))
+      val ds = creds.flatMap(mkDatasource[G](S3JsonParsing.JsonArray, testBucket, _))
 
       val path = ResourcePath.root() / ResourceName("does-not-exist")
-      val read: Stream[G, Data] = Stream.force(ds.flatMap(_.evaluator[Data].evaluate(path)))
+      val read: G[Stream[G, Data]] = ds.flatMap(_.evaluator[Data].evaluate(path))
 
-      read.compile.toList.value.unsafeRunSync must beLeft.like {
+      run(read.value) must beLeft.like {
         case ResourceError.throwableP(ResourceError.PathNotFound(_)) => ok
       }
     }

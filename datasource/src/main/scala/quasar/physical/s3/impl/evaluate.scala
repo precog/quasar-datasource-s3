@@ -24,11 +24,10 @@ import quasar.contrib.pathy._
 import quasar.physical.s3.S3JsonParsing
 
 
-import cats.data.OptionT
 import cats.effect.{Effect, Sync}
 import cats.syntax.applicative._
+import cats.syntax.functor._
 import cats.syntax.flatMap._
-import cats.syntax.option._
 
 import fs2.{Pipe, Stream}
 import jawn.{Facade, ParseException}
@@ -47,7 +46,7 @@ object evaluate {
       file: AFile,
       sign: Request[F] => F[Request[F]])
       (implicit MR: MonadResourceErr[F])
-      : F[Option[Stream[F, R]]] = {
+      : F[Stream[F, R]] = {
     // Convert the pathy Path to a POSIX path, dropping
     // the first slash, which is what S3 expects for object paths
     val objectPath = Path.posixCodec.printPath(file).drop(1)
@@ -56,15 +55,12 @@ object evaluate {
     val request = Request[F](uri = queryUri)
 
     sign(request) >>= { req =>
-      val stream = OptionT(
-        streamRequest[F, R](client, req) { resp =>
-          resp.body.chunks.map(_.toByteBuffer).through(parse(jsonParsing))
-        })
-
-      stream.map(_.handleErrorWith {
+      streamRequest[F, R](client, req, file) { resp =>
+        resp.body.chunks.map(_.toByteBuffer).through(parse(jsonParsing))
+      }.map(_.handleErrorWith {
         case ParseException(message, _, _, _) =>
           Stream.eval(MR.raiseError(parseError(file, jsonParsing, message)))
-      }).value
+      })
     }
   }
 
@@ -93,22 +89,22 @@ object evaluate {
       msg)
   }
 
-  // there is no method in http4s 0.16.6a that does what we
-  // want here, so we have to implement it ourselves.
-  // what we want specifically is to make an HTTP request,
-  // take the response, if it's a 404 return `None`,
-  // if it's `Some(resp)` we compute an fs2 stream from
-  // it using `f` and then call `dispose` on that response
-  // once we've finished streaming.
-  private def streamRequest[F[_]: Sync, A](
-      client: Client[F], req: Request[F])(
+  // There is no method in http4s 0.16.6a that does what we want here, so
+  // we have to implement it ourselves. What we want specifically is to
+  // make an HTTP request, take the response, if it's a 404 raise
+  // ResourceError.PathNotFound.  If the request succeeds we
+  // compute an fs2 stream from it using `f` and then call `dispose` on
+  // that response once we've finished streaming.
+  private def streamRequest[F[_]: Sync: MonadResourceErr, A](
+      client: Client[F], req: Request[F], file: AFile)(
       f: Response[F] => Stream[F, A])
-      : F[Option[Stream[F, A]]] =
+      (implicit MR: MonadResourceErr[F])
+      : F[Stream[F, A]] =
     client.open(req).flatMap {
       case DisposableResponse(response, dispose) =>
         response.status match {
-          case Status.NotFound => none.pure[F]
-          case Status.Ok => f(response).onFinalize(dispose).some.pure[F]
+          case Status.NotFound => MR.raiseError(ResourceError.pathNotFound(ResourcePath.Leaf(file)))
+          case Status.Ok => f(response).onFinalize(dispose).pure[F]
           case s => Sync[F].raiseError(new Exception(s"Unexpected status $s"))
         }
     }
