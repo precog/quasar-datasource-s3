@@ -34,9 +34,9 @@ import org.http4s.client.blaze.Http1Client
 import scalaz.{Id, ~>}, Id.Id
 import shims._
 
-import S3DataSourceSpec._
+import S3DatasourceSpec._
 
-class S3DataSourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
+class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
   val testBucket = Uri.uri("https://s3.amazonaws.com/slamdata-public-test")
   val nonExistentPath =
     ResourcePath.root() / ResourceName("does") / ResourceName("not") / ResourceName("exist")
@@ -169,13 +169,13 @@ class S3DataSourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
     creds: Option[S3Credentials])
       : F[Datasource[F, Stream[F, ?], ResourcePath]] =
     Http1Client[F]().map(client =>
-     new S3DataSource[F](client, S3Config(bucket, parsing, creds)))
+      new S3Datasource[F](client, S3Config(bucket, parsing, creds)))
 
   val datasourceLD = run(mkDatasource[IO](S3JsonParsing.LineDelimited, testBucket, None))
   val datasource = run(mkDatasource[IO](S3JsonParsing.JsonArray, testBucket, None))
 }
 
-object S3DataSourceSpec {
+object S3DatasourceSpec {
   type G[A] = EitherT[IO, Throwable, A]
 
   implicit val ioMonadResourceErr: MonadError_[IO, ResourceError] =

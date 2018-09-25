@@ -45,7 +45,7 @@ import qdata.json.QDataFacade
 import scalaz.{\/-, -\/, OptionT}
 import shims._
 
-final class S3DataSource[F[_]: Effect: MonadResourceErr](
+final class S3Datasource[F[_]: Effect: MonadResourceErr](
   client: Client[F],
   config: S3Config)
     extends LightweightDatasource[F, Stream[F, ?]] {
@@ -106,10 +106,10 @@ final class S3DataSource[F[_]: Effect: MonadResourceErr](
     }
 
   private def signRequest(c: S3Config): Request[F] => F[Request[F]] =
-    S3DataSource.signRequest(c)
+    S3Datasource.signRequest(c)
 }
 
-object S3DataSource {
+object S3Datasource {
   def signRequest[F[_]: Effect](c: S3Config): Request[F] => F[Request[F]] =
     c.credentials match {
       case Some(creds) => {

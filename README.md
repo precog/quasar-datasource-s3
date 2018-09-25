@@ -90,7 +90,7 @@ For BSD (or macOS) `base64`:
 base64 -D -i testCredentials.json.b64 -o testCredentials.json
 ```
 
-After this, you should be able to run the `SecureS3DataSourceSpec` spec
+After this, you should be able to run the `SecureS3DatasourceSpec` spec
 
 
 ## Thanks to Sponsors
