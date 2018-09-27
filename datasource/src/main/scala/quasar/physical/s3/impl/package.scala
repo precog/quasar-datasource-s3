@@ -39,15 +39,26 @@ package object impl {
     val sep =
       if (uri.path.isEmpty || uri.path.lastOption =!= Some('/')) "/"
       else ""
-    val newPath = s"${uri.path}$sep${s3Encode(newSegment)}"
+    val newPath = s"${uri.path}$sep${s3Encode(newSegment, encodeSlash = false)}"
 
     uri.withPath(newPath)
   }
 
   // S3 specific encoding, see
   // https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html
-  def s3Encode(s: String) =
-    URLEncoder.encode(s, StandardCharsets.UTF_8.toString)
-      .replaceAll("%2F", "/").replaceAll("\\+", "%20")
+  def s3Encode(s: String, encodeSlash: Boolean) = {
+    val e = URLEncoder.encode(s, StandardCharsets.UTF_8.toString)
+      .replaceAll("\\+", "%20")
+    // URLEncoder encodes / to %2F
+    // so in case of encodeSlash e already contains the correct result//
+    // if !encodeSlash then we need to decode it back to /
+    if (encodeSlash) e else e.replaceAll("%2F", "/")
+  }
+
+  def s3EncodeQueryParams(queryParams: Map[String, String]): String =
+    queryParams.toSeq
+      .sortBy(_._1)
+      .map({ case (k, v) => s3Encode(k, encodeSlash = true) + "=" + s3Encode(v, encodeSlash = true) })
+      .mkString("&")
 
 }

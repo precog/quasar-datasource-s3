@@ -41,7 +41,7 @@ import cats.syntax.functor._
 import cats.syntax.option._
 import cats.syntax.traverse._
 import fs2.Stream
-import org.http4s.{MalformedMessageBodyFailure, Status}
+import org.http4s.{MalformedMessageBodyFailure, Query, Status}
 import org.http4s.client.{Client, UnexpectedStatus}
 import org.http4s.headers.`Content-Type`
 import org.http4s.scalaxml.{xml => xmlDecoder}
@@ -144,17 +144,17 @@ object children {
     val listingQuery = (bucket / "")
 
     val listType = ("list-type", "2").some
+    val delimiter = ("delimiter", "%2F").some
     // Converts a pathy Path to an S3 object prefix.
     val objectPrefix = aPathToObjectPrefix(dir)
     val prefix = objectPrefix.map(("prefix", _))
 
     val ct0 = ct.map(_.value).map(("continuation-token", _))
 
-    val queryUri = List(listType, prefix, ct0).unite.foldLeft(listingQuery) {
-      case (uri0, (param, value)) => uri0.withQueryParam(param, value)
-    }
+    val q = Query.fromString(s3EncodeQueryParams(
+      List(delimiter, listType, prefix, ct0).unite.toMap))
 
-    Request[F](uri = queryUri)
+    Request[F](uri = listingQuery.copy(query = q))
   }
 
   // Lists all objects and prefixes from a ListObjects request. This needs to be filtered
