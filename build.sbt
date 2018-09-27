@@ -143,10 +143,10 @@ lazy val root = project.in(file("."))
 
 // common components
 
-// Quasar needs to know where the DataSourceModule for the connector is
+// Quasar needs to know where the DatasourceModule for the connector is
 lazy val manifestSettings =
   packageOptions in (Compile, packageBin) +=
-    Package.ManifestAttributes("DataSource-Module" -> "quasar.physical.s3.S3DataSourceModule$")
+    Package.ManifestAttributes("Datasource-Module" -> "quasar.physical.s3.S3DatasourceModule$")
 
 /** Lightweight connector module.
   */

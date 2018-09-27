@@ -34,9 +34,9 @@ import org.http4s.client.blaze.Http1Client
 import scalaz.{Id, ~>}, Id.Id
 import shims._
 
-import S3DataSourceSpec._
+import S3DatasourceSpec._
 
-class S3DataSourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
+class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
   val testBucket = Uri.uri("https://s3.amazonaws.com/slamdata-public-test")
   val nonExistentPath =
     ResourcePath.root() / ResourceName("does") / ResourceName("not") / ResourceName("exist")
@@ -159,12 +159,12 @@ class S3DataSourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
 
     "reading a non-existent file raises ResourceError.PathNotFound" >> {
       val creds = EitherT.right[Throwable](credentials)
-      val ds = creds.flatMap(c => mkDatasource[G](S3JsonParsing.JsonArray, testBucket, c))
+      val ds = creds.flatMap(mkDatasource[G](S3JsonParsing.JsonArray, testBucket, _))
 
       val path = ResourcePath.root() / ResourceName("does-not-exist")
-      val read: Stream[G, Data] = Stream.force(ds.flatMap(_.evaluator[Data].evaluate(path)))
+      val read: G[Stream[G, Data]] = ds.flatMap(_.evaluator[Data].evaluate(path))
 
-      read.compile.toList.value.unsafeRunSync must beLeft.like {
+      run(read.value) must beLeft.like {
         case ResourceError.throwableP(ResourceError.PathNotFound(_)) => ok
       }
     }
@@ -194,13 +194,13 @@ class S3DataSourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
     creds: Option[S3Credentials])
       : F[Datasource[F, Stream[F, ?], ResourcePath]] =
     Http1Client[F]().map(client =>
-     new S3DataSource[F](client, S3Config(bucket, parsing, creds)))
+      new S3Datasource[F](client, S3Config(bucket, parsing, creds)))
 
   val datasourceLD = run(mkDatasource[IO](S3JsonParsing.LineDelimited, testBucket, None))
   val datasource = run(mkDatasource[IO](S3JsonParsing.JsonArray, testBucket, None))
 }
 
-object S3DataSourceSpec {
+object S3DatasourceSpec {
   type G[A] = EitherT[IO, Throwable, A]
 
   implicit val ioMonadResourceErr: MonadError_[IO, ResourceError] =
