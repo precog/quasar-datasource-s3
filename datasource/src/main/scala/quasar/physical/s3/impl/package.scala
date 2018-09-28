@@ -49,10 +49,9 @@ package object impl {
   def s3Encode(s: String, encodeSlash: Boolean) = {
     val e = URLEncoder.encode(s, StandardCharsets.UTF_8.toString)
       .replaceAll("\\+", "%20")
-    // URLEncoder encodes / to %2F
-    // so in case of encodeSlash e already contains the correct result//
-    // if !encodeSlash then we need to decode it back to /
-    if (encodeSlash) e else e.replaceAll("%2F", "/")
+    // URLEncoder already encodes / to %2F
+    if (encodeSlash) e // .. so here we already have the correct result
+    else e.replaceAll("%2F", "/") // .. and here we need to decode %2F back to /
   }
 
   def s3EncodeQueryParams(queryParams: Map[String, String]): String =
