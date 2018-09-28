@@ -17,13 +17,15 @@
 package quasar.physical.s3
 
 import slamdata.Predef._
-import java.net.URLEncoder
+import quasar.physical.s3.impl.s3EncodeQueryParams
+
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
+
 import cats.effect.Sync
 import cats.implicits._
 import fs2.Stream
@@ -56,10 +58,7 @@ object RequestSigning {
   }
 
   private def renderCanonicalQueryString(queryParams: Map[String, String]): String =
-    queryParams.toSeq
-      .sortBy(_._1)
-      .map({ case (k, v) => k + "=" + URLEncoder.encode(v, StandardCharsets.UTF_8.toString) })
-      .mkString("&")
+    s3EncodeQueryParams(queryParams)
 
   private def hmacSha256(data: String, key: Array[Byte]): Array[Byte] = {
     val macAlg = "HmacSHA256"

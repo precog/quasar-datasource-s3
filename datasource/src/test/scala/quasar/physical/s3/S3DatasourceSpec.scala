@@ -41,7 +41,8 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
   val nonExistentPath =
     ResourcePath.root() / ResourceName("does") / ResourceName("not") / ResourceName("exist")
 
-  val spanishResourcePrefix = ResourcePath.root() / ResourceName("testData") / ResourceName("El veloz murciélago hindú") / ResourceName("comía feliz cardillo y kiwi") / ResourceName("La cigüeña tocaba el saxofón")
+  val spanishResourceName1 = ResourceName("El veloz murciélago hindú")
+  val spanishResourcePrefix = ResourcePath.root() / ResourceName("testData") / spanishResourceName1 / ResourceName("comía feliz cardillo y kiwi") / ResourceName("La cigüeña tocaba el saxofón")
   val spanishResourceLeaf = ResourceName("detrás del palenque de paja")
   val spanishResource = spanishResourcePrefix / spanishResourceLeaf
 
@@ -94,12 +95,36 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
           ResourceName("testData") -> ResourcePathType.prefix))
     }
 
-    "list a file with special characters in it" >>* {
+    "list children with special chars" >>* {
       assertPrefixedChildPaths(
         ResourcePath.root() / ResourceName("dir1"),
         List(
           ResourceName("dir2") -> ResourcePathType.prefix,
           ResourceName("fóóbar.ldjson") -> ResourcePathType.leafResource))
+    }
+
+    "list children with more special chars" >>* {
+      assertPrefixedChildPaths(
+        ResourcePath.root() / ResourceName("testData"),
+        List(
+          spanishResourceName1 -> ResourcePathType.prefix,
+          ResourceName("a b") -> ResourcePathType.prefix,
+          ResourceName("array.json") -> ResourcePathType.leafResource,
+          ResourceName("lines.json") -> ResourcePathType.leafResource,
+          ResourceName("á") -> ResourcePathType.prefix))
+    }
+
+    "list children when space in path" >>* {
+      assertPrefixedChildPaths(
+        ResourcePath.root() / ResourceName("testData") / ResourceName("a b"),
+        List(
+          ResourceName("a b.json") -> ResourcePathType.leafResource))
+    }
+
+    "list children with special chars when special chars in path" >>* {
+      assertPrefixedChildPaths(
+        spanishResourcePrefix,
+        List(spanishResourceLeaf -> ResourcePathType.leafResource))
     }
   }
 
