@@ -14,3 +14,7 @@ SBT="$WS_DIR/sbt"
 # Set TRAVIS_JOB_NUMBER as a workaround to meet sbt-slamdata's publishAndTag assumption
 TRAVIS_JOB_NUMBER=1 scripts/publishAndTag 'slamdata/quasar-s3'
 
+bumpInDownstream() { echo $1 > slamdata-s3-version; }
+export -f bumpInDownstream
+
+scripts/bumpDependentProject slamdata slamx bumpInDownstream
