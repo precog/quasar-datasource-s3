@@ -22,7 +22,7 @@ import quasar.api.datasource.DatasourceError.AccessDenied
 import quasar.connector.ResourceError
 import quasar.contrib.scalaz.MonadError_
 
-import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.ExecutionContext
 
 import argonaut.Json
 import cats.effect.IO
@@ -31,6 +31,9 @@ import shims._
 
 class S3DatasourceModuleSpec extends Specification {
   import S3DatasourceModuleSpec._
+
+  implicit val cs = IO.contextShift(ExecutionContext.global)
+  implicit val timer = IO.timer(ExecutionContext.global)
 
   "rejects invalid credentials" >> {
     // slamdata-private-test is a bucket that requires credentials to access

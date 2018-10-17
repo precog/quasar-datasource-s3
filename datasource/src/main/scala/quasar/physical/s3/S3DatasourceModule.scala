@@ -26,10 +26,13 @@ import quasar.connector.Datasource
 import quasar.connector.LightweightDatasourceModule
 import quasar.connector.MonadResourceErr
 
+import scala.concurrent.ExecutionContext
+
 import argonaut.{EncodeJson, Json}
-import cats.effect.{ConcurrentEffect, Timer}
+import cats.effect.{ConcurrentEffect, ContextShift, Timer}
 import fs2.Stream
-import org.http4s.client.blaze.Http1Client
+import org.http4s.client.blaze.BlazeClientBuilder
+import org.http4s.client.Client
 import scalaz.{\/, NonEmptyList}
 import scalaz.syntax.either._
 import cats.syntax.applicative._
@@ -41,11 +44,13 @@ import slamdata.Predef.{Stream => _, _}
 object S3DatasourceModule extends LightweightDatasourceModule {
   def kind: DatasourceType = s3.datasourceKind
 
-  def lightweightDatasource[F[_]: ConcurrentEffect: MonadResourceErr: Timer](config: Json)
+  def lightweightDatasource[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](config: Json)
       : F[InitializationError[Json] \/ Disposable[F, Datasource[F, Stream[F, ?], ResourcePath]]] = {
+    val ec = ExecutionContext.Implicits.global
+
     config.as[S3Config].result match {
-      case Right(s3Config) => {
-        Http1Client[F]() flatMap { client =>
+      case Right(s3Config) =>
+        BlazeClientBuilder[F](ec).resource.use { (client: Client[F]) =>
           val s3Ds = new S3Datasource[F](client, s3Config)
           val ds: Datasource[F, Stream[F, ?], ResourcePath] = s3Ds
 
@@ -60,7 +65,6 @@ object S3DatasourceModule extends LightweightDatasourceModule {
               .left.pure[F]
           })
         }
-      }
 
       case Left((msg, _)) =>
         DatasourceError
@@ -80,4 +84,5 @@ object S3DatasourceModule extends LightweightDatasourceModule {
       c.credentials.fold(c)(_ => c.copy(credentials = redactedCreds.some)))
       .fold(config)(rc => EncodeJson.of[S3Config].encode(rc))
   }
+
 }

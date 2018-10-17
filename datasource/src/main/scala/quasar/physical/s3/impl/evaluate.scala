@@ -28,6 +28,7 @@ import cats.effect.{Effect, Sync}
 import cats.syntax.applicative._
 import cats.syntax.functor._
 import cats.syntax.flatMap._
+import cats.ApplicativeError
 
 import fs2.{Pipe, Stream}
 import jawn.{Facade, ParseException}
@@ -66,7 +67,7 @@ object evaluate {
 
   ////
 
-  private def parse[F[_], R: Facade](jsonParsing: S3JsonParsing)
+  private def parse[F[_]: ApplicativeError[?[_], Throwable], R: Facade](jsonParsing: S3JsonParsing)
       : Pipe[F, ByteBuffer, R] =
     jsonParsing match {
       case S3JsonParsing.JsonArray => unwrapJsonArray[F, ByteBuffer, R]

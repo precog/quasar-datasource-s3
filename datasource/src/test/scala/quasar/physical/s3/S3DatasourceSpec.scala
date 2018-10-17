@@ -18,17 +18,22 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 
+import quasar.Disposable
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.common.data.Data
 import quasar.connector.{Datasource, DatasourceSpec, MonadResourceErr, ResourceError}
 import quasar.connector.ResourceError
 import quasar.contrib.scalaz.MonadError_
 
+import scala.concurrent.ExecutionContext
+
 import cats.data.{EitherT, OptionT}
-import cats.effect.{Effect, IO}
+import cats.effect.{ConcurrentEffect, Effect, ExitCase, IO, Resource}
 import cats.syntax.applicative._
 import cats.syntax.functor._
+import cats.syntax.flatMap._
 import fs2.Stream
+import org.http4s.client.blaze.BlazeClientBuilder
 import org.http4s.Uri
 import org.http4s.client.blaze.Http1Client
 import scalaz.{Id, ~>}, Id.Id
@@ -188,16 +193,31 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
 
   val run = λ[IO ~> Id](_.unsafeRunSync)
 
-  def mkDatasource[F[_]: Effect: MonadResourceErr](
+  def mkDatasource[F[_]: ConcurrentEffect: MonadResourceErr](
     parsing: S3JsonParsing,
     bucket: Uri,
     creds: Option[S3Credentials])
-      : F[Datasource[F, Stream[F, ?], ResourcePath]] =
-    Http1Client[F]().map(client =>
-      new S3Datasource[F](client, S3Config(bucket, parsing, creds)))
+      : F[Datasource[F, Stream[F, ?], ResourcePath]] = {
+
+    val ec = ExecutionContext.Implicits.global
+    val builder = BlazeClientBuilder[F](ec)
+    val client = unsafeResource(builder.resource)
+
+    client map (new S3Datasource[F](_, S3Config(bucket, parsing, creds)))
+  }
 
   val datasourceLD = run(mkDatasource[IO](S3JsonParsing.LineDelimited, testBucket, None))
   val datasource = run(mkDatasource[IO](S3JsonParsing.JsonArray, testBucket, None))
+
+  // FIXME: eliminate inheritance from DatasourceSpec and sequence the resource instead of
+  // ignoring clean up here.
+  private def unsafeResource[F[_]: Effect, A](r: Resource[F, A]): F[A] = r match {
+    case Resource.Allocate(a) => a map {
+      case (res, _) => res
+    }
+    case Resource.Bind(r, f) => unsafeResource(r).flatMap(a => unsafeResource(f(a)))
+    case Resource.Suspend(r) => r.flatMap(unsafeResource(_))
+  }
 }
 
 object S3DatasourceSpec {
