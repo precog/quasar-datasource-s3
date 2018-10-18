@@ -18,7 +18,6 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 
-import quasar.Disposable
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.common.data.Data
 import quasar.connector.{Datasource, DatasourceSpec, MonadResourceErr, ResourceError}
@@ -28,14 +27,13 @@ import quasar.contrib.scalaz.MonadError_
 import scala.concurrent.ExecutionContext
 
 import cats.data.{EitherT, OptionT}
-import cats.effect.{ConcurrentEffect, Effect, ExitCase, IO, Resource}
+import cats.effect.{ConcurrentEffect, Effect, IO, Resource}
 import cats.syntax.applicative._
 import cats.syntax.functor._
 import cats.syntax.flatMap._
 import fs2.Stream
 import org.http4s.client.blaze.BlazeClientBuilder
 import org.http4s.Uri
-import org.http4s.client.blaze.Http1Client
 import scalaz.{Id, ~>}, Id.Id
 import shims._
 
