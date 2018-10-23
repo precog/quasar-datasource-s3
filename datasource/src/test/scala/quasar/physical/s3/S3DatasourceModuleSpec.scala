@@ -25,15 +25,16 @@ import quasar.contrib.scalaz.MonadError_
 import scala.concurrent.ExecutionContext
 
 import argonaut.Json
-import cats.effect.IO
+import cats.effect.{ContextShift, IO, Timer}
 import org.specs2.mutable.Specification
 import shims._
 
 class S3DatasourceModuleSpec extends Specification {
   import S3DatasourceModuleSpec._
 
-  implicit val cs = IO.contextShift(ExecutionContext.global)
-  implicit val timer = IO.timer(ExecutionContext.global)
+  implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
+  implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
+  implicit val ec: ExecutionContext = ExecutionContext.global
 
   "rejects invalid credentials" >> {
     // slamdata-private-test is a bucket that requires credentials to access
@@ -60,32 +61,34 @@ class S3DatasourceModuleSpec extends Specification {
     }
   }
 
-  "removes AccessKey, SecretKey and Region from credentials" >> {
-    val conf = Json.obj(
-      "bucket" -> Json.jString("https://some.bucket.uri"),
-      "jsonParsing" -> Json.jString("array"),
-      "credentials" -> Json.obj(
-        "accessKey" -> Json.jString("some access key"),
-        "secretKey" -> Json.jString("super secret key"),
-        "region" -> Json.jString("us-east-1")))
+  "sanitizeConfig" in {
+    "removes AccessKey, SecretKey and Region from credentials" >> {
+      val conf = Json.obj(
+        "bucket" -> Json.jString("https://some.bucket.uri"),
+        "jsonParsing" -> Json.jString("array"),
+        "credentials" -> Json.obj(
+          "accessKey" -> Json.jString("some access key"),
+          "secretKey" -> Json.jString("super secret key"),
+          "region" -> Json.jString("us-east-1")))
 
-    val redactedConf = Json.obj(
-      "bucket" -> Json.jString("https://some.bucket.uri"),
-      "jsonParsing" -> Json.jString("array"),
-      "credentials" -> Json.obj(
-        "accessKey" -> Json.jString("<REDACTED>"),
-        "secretKey" -> Json.jString("<REDACTED>"),
-        "region" -> Json.jString("<REDACTED>")))
+      val redactedConf = Json.obj(
+        "bucket" -> Json.jString("https://some.bucket.uri"),
+        "jsonParsing" -> Json.jString("array"),
+        "credentials" -> Json.obj(
+          "accessKey" -> Json.jString("<REDACTED>"),
+          "secretKey" -> Json.jString("<REDACTED>"),
+          "region" -> Json.jString("<REDACTED>")))
 
-    S3DatasourceModule.sanitizeConfig(conf) must_== redactedConf
-  }
+      S3DatasourceModule.sanitizeConfig(conf) must_== redactedConf
+    }
 
-  "does nothing when there are no credentials to redact" >> {
-    val conf = Json.obj(
-      "bucket" -> Json.jString("https://some.bucket.uri"),
-      "jsonParsing" -> Json.jString("array"))
+    "does nothing when there are no credentials to redact" >> {
+      val conf = Json.obj(
+        "bucket" -> Json.jString("https://some.bucket.uri"),
+        "jsonParsing" -> Json.jString("array"))
 
-    S3DatasourceModule.sanitizeConfig(conf) must_== conf
+      S3DatasourceModule.sanitizeConfig(conf) must_== conf
+    }
   }
 }
 

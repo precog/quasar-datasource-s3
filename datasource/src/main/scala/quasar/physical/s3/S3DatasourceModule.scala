@@ -32,7 +32,6 @@ import argonaut.{EncodeJson, Json}
 import cats.effect.{ConcurrentEffect, ContextShift, Timer}
 import fs2.Stream
 import org.http4s.client.blaze.BlazeClientBuilder
-import org.http4s.client.Client
 import scalaz.{\/, NonEmptyList}
 import scalaz.syntax.either._
 import cats.syntax.applicative._
@@ -44,13 +43,12 @@ import slamdata.Predef.{Stream => _, _}
 object S3DatasourceModule extends LightweightDatasourceModule {
   def kind: DatasourceType = s3.datasourceKind
 
-  def lightweightDatasource[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](config: Json)
-      : F[InitializationError[Json] \/ Disposable[F, Datasource[F, Stream[F, ?], ResourcePath]]] = {
-    val ec = ExecutionContext.Implicits.global
-
+  def lightweightDatasource[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
+    config: Json)(implicit ec: ExecutionContext)
+      : F[InitializationError[Json] \/ Disposable[F, Datasource[F, Stream[F, ?], ResourcePath]]] =
     config.as[S3Config].result match {
       case Right(s3Config) =>
-        BlazeClientBuilder[F](ec).resource.use { (client: Client[F]) =>
+        BlazeClientBuilder[F](ec).resource.use { client =>
           val s3Ds = new S3Datasource[F](client, s3Config)
           val ds: Datasource[F, Stream[F, ?], ResourcePath] = s3Ds
 
@@ -71,7 +69,6 @@ object S3DatasourceModule extends LightweightDatasourceModule {
           .invalidConfiguration[Json, InitializationError[Json]](kind, config, NonEmptyList(msg))
           .left.pure[F]
     }
-  }
 
   def sanitizeConfig(config: Json): Json = {
     val redactedCreds =
