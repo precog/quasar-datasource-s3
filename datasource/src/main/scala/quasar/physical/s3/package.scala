@@ -20,10 +20,12 @@ import quasar.api.datasource.DatasourceType
 
 import slamdata.Predef._
 
-import eu.timepit.refined.auto._
-import cats.{FlatMap, Show}
+import cats.Show
 import cats.effect.{ExitCase, Resource}
-import cats.syntax.flatMap._
+import eu.timepit.refined.auto._
+import scalaz.Bind
+import scalaz.syntax.bind._
+import shims._
 
 sealed trait S3Error
 
@@ -51,7 +53,7 @@ package object s3 {
   val datasourceKind: DatasourceType = DatasourceType("s3", 1L)
 
   @SuppressWarnings(Array("org.wartremover.warts.Recursion"))
-  def resourceCleanup[F[_]: FlatMap, A](r: Resource[F, A]): F[Unit] =
+  def resourceCleanup[F[_]: Bind, A](r: Resource[F, A]): F[Unit] =
     r match {
       case Resource.Allocate(a) => a flatMap {
         case (_, release) => release(ExitCase.Completed)
