@@ -30,7 +30,6 @@ import scala.concurrent.ExecutionContext
 import argonaut.{EncodeJson, Json}
 import cats.effect.{ConcurrentEffect, ContextShift, Timer}
 import fs2.Stream
-import org.http4s.client.Client
 import org.http4s.client.blaze.BlazeClientBuilder
 import scalaz.{\/, NonEmptyList}
 import scalaz.syntax.either._

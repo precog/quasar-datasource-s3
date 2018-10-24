@@ -24,7 +24,6 @@ import eu.timepit.refined.auto._
 import cats.{FlatMap, Show}
 import cats.effect.{ExitCase, Resource}
 import cats.syntax.flatMap._
-import cats.syntax.functor._
 
 sealed trait S3Error
 
@@ -54,7 +53,7 @@ package object s3 {
   @SuppressWarnings(Array("org.wartremover.warts.Recursion"))
   def resourceCleanup[F[_]: FlatMap, A](r: Resource[F, A]): F[Unit] =
     r match {
-      case Resource.Allocate(a) => a map {
+      case Resource.Allocate(a) => a flatMap {
         case (_, release) => release(ExitCase.Completed)
       }
       case Resource.Bind(src, fs) =>
