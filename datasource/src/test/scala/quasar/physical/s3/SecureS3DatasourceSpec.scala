@@ -39,25 +39,25 @@ final class SecureS3DatasourceSpec extends S3DatasourceSpec {
   override val testBucket = Uri.uri("https://s3.amazonaws.com/slamdata-private-test")
 
   override val credentials: IO[Option[S3Credentials]] = {
-    val read = IO.delay({
+    val read = IO {
       val file = new File(credsFile)
       val src = Source.fromFile(file)(Codec.UTF8)
 
       (src.getLines.mkString, src)
-    })
+    }
 
     read.bracket({
       case (p, _) => {
-          val msg = "Failed to read testCredentials.json"
-          val jsonConfig =
-            Parse.parse(p).toOption.map(_.pure[IO]).getOrElse(IO.raiseError(new Exception(msg)))
+        val msg = "Failed to read testCredentials.json"
+        val jsonConfig =
+          Parse.parse(p).toOption.map(_.pure[IO]).getOrElse(IO.raiseError(new Exception(msg)))
 
-          jsonConfig
-            .map(DecodeJson.of[S3Credentials].decodeJson(_))
-            .map(_.toOption) >>= (_.fold[IO[Option[S3Credentials]]](IO.raiseError(new Exception(msg)))(c => c.some.pure[IO]))
+        jsonConfig
+          .map(DecodeJson.of[S3Credentials].decodeJson(_))
+          .map(_.toOption) >>= (_.fold[IO[Option[S3Credentials]]](IO.raiseError(new Exception(msg)))(c => c.some.pure[IO]))
       }
     })({
-      case (_, src) => IO.delay(src.close)
+      case (_, src) => IO(src.close)
     })
   }
 
