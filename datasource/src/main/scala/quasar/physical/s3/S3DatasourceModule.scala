@@ -16,7 +16,6 @@
 
 package quasar.physical.s3
 
-
 import quasar.Disposable
 import quasar.api.datasource.DatasourceError
 import quasar.api.datasource.DatasourceError.InitializationError
@@ -31,6 +30,7 @@ import scala.concurrent.ExecutionContext
 import argonaut.{EncodeJson, Json}
 import cats.effect.{ConcurrentEffect, ContextShift, Timer}
 import fs2.Stream
+import org.http4s.client.Client
 import org.http4s.client.blaze.BlazeClientBuilder
 import scalaz.{\/, NonEmptyList}
 import scalaz.syntax.either._
@@ -48,12 +48,14 @@ object S3DatasourceModule extends LightweightDatasourceModule {
       : F[InitializationError[Json] \/ Disposable[F, Datasource[F, Stream[F, ?], ResourcePath]]] =
     config.as[S3Config].result match {
       case Right(s3Config) =>
-        BlazeClientBuilder[F](ec).resource.use { client =>
+        val clientResource = BlazeClientBuilder[F](ec).resource
+
+        clientResource.use { client =>
           val s3Ds = new S3Datasource[F](client, s3Config)
           val ds: Datasource[F, Stream[F, ?], ResourcePath] = s3Ds
 
           s3Ds.isLive.ifM({
-            Disposable(ds, client.shutdown).right.pure[F]
+            Disposable(ds, s3.resourceCleanup(clientResource)).right.pure[F]
           },
           {
             val msg = "Unable to ListObjects at the root of the bucket"
@@ -78,8 +80,8 @@ object S3DatasourceModule extends LightweightDatasourceModule {
         Region("<REDACTED>"))
 
     config.as[S3Config].result.toOption.map((c: S3Config) =>
+      // ignore the existing credentials and replace them with redactedCreds
       c.credentials.fold(c)(_ => c.copy(credentials = redactedCreds.some)))
       .fold(config)(rc => EncodeJson.of[S3Config].encode(rc))
   }
-
 }

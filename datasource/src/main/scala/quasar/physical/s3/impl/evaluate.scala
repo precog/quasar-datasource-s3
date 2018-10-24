@@ -90,23 +90,15 @@ object evaluate {
       msg)
   }
 
-  // There is no method in http4s 0.16.6a that does what we want here, so
-  // we have to implement it ourselves. What we want specifically is to
-  // make an HTTP request, take the response, if it's a 404 raise
-  // ResourceError.PathNotFound.  If the request succeeds we
-  // compute an fs2 stream from it using `f` and then call `dispose` on
-  // that response once we've finished streaming.
   private def streamRequest[F[_]: Sync: MonadResourceErr, A](
       client: Client[F], req: Request[F], file: AFile)(
       f: Response[F] => Stream[F, A])
       (implicit MR: MonadResourceErr[F])
-      : F[Stream[F, A]] =
-    client.open(req).flatMap {
-      case DisposableResponse(response, dispose) =>
-        response.status match {
-          case Status.NotFound => MR.raiseError(ResourceError.pathNotFound(ResourcePath.Leaf(file)))
-          case Status.Ok => f(response).onFinalize(dispose).pure[F]
-          case s => Sync[F].raiseError(new Exception(s"Unexpected status $s"))
-        }
-    }
+      : F[Stream[F, A]] = {
+    client.run(req).use(resp => resp.status match {
+      case Status.NotFound => MR.raiseError(ResourceError.pathNotFound(ResourcePath.Leaf(file)))
+      case Status.Ok => f(resp).pure[F]
+      case s => Sync[F].raiseError(new Exception(s"Unexpected status $s"))
+    })
+  }
 }

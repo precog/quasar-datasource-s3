@@ -6,7 +6,7 @@ import scala.collection.Seq
 import sbt._
 
 object Dependencies {
-  private val http4sVersion = "0.19.0-M2"
+  private val http4sVersion = "0.19.0-M4"
 
   // hooray, scala-xml. we use it for parsing XML out of
   // the S3 API's responses.

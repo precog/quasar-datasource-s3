@@ -16,10 +16,15 @@
 
 package quasar.physical.s3
 
-import scala.Predef._
 import quasar.api.datasource.DatasourceType
+
+import slamdata.Predef._
+
 import eu.timepit.refined.auto._
-import cats.Show
+import cats.{FlatMap, Show}
+import cats.effect.{ExitCase, Resource}
+import cats.syntax.flatMap._
+import cats.syntax.functor._
 
 sealed trait S3Error
 
@@ -45,4 +50,16 @@ object S3JsonParsing {
 
 package object s3 {
   val datasourceKind: DatasourceType = DatasourceType("s3", 1L)
+
+  @SuppressWarnings(Array("org.wartremover.warts.Recursion"))
+  def resourceCleanup[F[_]: FlatMap, A](r: Resource[F, A]): F[Unit] =
+    r match {
+      case Resource.Allocate(a) => a map {
+        case (_, release) => release(ExitCase.Completed)
+      }
+      case Resource.Bind(src, fs) =>
+        resourceCleanup(src).flatMap(s => resourceCleanup(fs(s)))
+      case Resource.Suspend(res) =>
+        res.flatMap(resourceCleanup(_))
+    }
 }
