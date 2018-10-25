@@ -30,7 +30,6 @@ import cats.data.{EitherT, OptionT}
 import cats.effect.{ConcurrentEffect, Effect, IO, Resource}
 import cats.syntax.applicative._
 import cats.syntax.functor._
-import cats.syntax.flatMap._
 import fs2.Stream
 import org.http4s.client.blaze.BlazeClientBuilder
 import org.http4s.Uri
