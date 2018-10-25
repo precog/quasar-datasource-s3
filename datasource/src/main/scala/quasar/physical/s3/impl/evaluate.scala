@@ -23,7 +23,6 @@ import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.contrib.pathy._
 import quasar.physical.s3.S3JsonParsing
 
-
 import cats.effect.{Effect, Sync}
 import cats.syntax.applicative._
 import cats.syntax.functor._
@@ -91,14 +90,18 @@ object evaluate {
   }
 
   private def streamRequest[F[_]: Sync: MonadResourceErr, A](
-      client: Client[F], req: Request[F], file: AFile)(
-      f: Response[F] => Stream[F, A])
-      (implicit MR: MonadResourceErr[F])
-      : F[Stream[F, A]] = {
-    client.run(req).use(resp => resp.status match {
-      case Status.NotFound => MR.raiseError(ResourceError.pathNotFound(ResourcePath.Leaf(file)))
-      case Status.Ok => f(resp).pure[F]
-      case s => Sync[F].raiseError(new Exception(s"Unexpected status $s"))
-    })
-  }
+    client: Client[F], req: Request[F], file: AFile)(
+    f: Response[F] => Stream[F, A])
+    (implicit MR: MonadResourceErr[F])
+      : F[Stream[F, A]] =
+    s3.resourceToDisposable(client.run(req)).flatMap { disposable =>
+      val response = disposable.unsafeValue
+      val dispose = disposable.dispose
+
+      response.status match {
+        case Status.NotFound => MR.raiseError(ResourceError.pathNotFound(ResourcePath.Leaf(file)))
+        case Status.Ok => f(response).onFinalize(dispose).pure[F]
+        case s => Sync[F].raiseError(new Exception(s"Unexpected status $s"))
+      }
+    }
 }
