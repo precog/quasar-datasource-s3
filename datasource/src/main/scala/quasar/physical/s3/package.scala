@@ -16,15 +16,17 @@
 
 package quasar.physical.s3
 
+import quasar.Disposable
 import quasar.api.datasource.DatasourceType
+import quasar.contrib.scalaz.MonadError_
 
 import slamdata.Predef._
 
 import cats.Show
 import cats.effect.{ExitCase, Resource}
 import eu.timepit.refined.auto._
-import scalaz.Bind
-import scalaz.syntax.bind._
+import scalaz.{Bind, Monad}
+import scalaz.syntax.monad._
 import shims._
 
 sealed trait S3Error
@@ -53,14 +55,23 @@ package object s3 {
   val datasourceKind: DatasourceType = DatasourceType("s3", 1L)
 
   @SuppressWarnings(Array("org.wartremover.warts.Recursion"))
-  def resourceCleanup[F[_]: Bind, A](r: Resource[F, A]): F[Unit] =
+  def resourceToDisposable[F[_]: Monad: MonadError_[?[_], Throwable], A](r: Resource[F, A])
+      : F[Disposable[F, A]] =
     r match {
-      case Resource.Allocate(a) => a flatMap {
-        case (_, release) => release(ExitCase.Completed)
+      case Resource.Allocate(a) => a map {
+        case (res, release) => Disposable(res, release(ExitCase.Completed))
       }
-      case Resource.Bind(src, fs) =>
-        resourceCleanup(src).flatMap(s => resourceCleanup(fs(s)))
+      case Resource.Bind(src, fs) => {
+        val fdisp: F[Disposable[F, F[Disposable[F, A]]]] =
+          resourceToDisposable(src)
+            .map(_.map(a => resourceToDisposable(fs(a))))
+
+        val fresource = fdisp.flatMap(_.unsafeValue)
+        val fclean = fdisp.flatMap(_.dispose)
+
+        fresource.map(_.onDispose(fclean))
+      }
       case Resource.Suspend(res) =>
-        res.flatMap(resourceCleanup(_))
+        res.flatMap(resourceToDisposable(_))
     }
 }

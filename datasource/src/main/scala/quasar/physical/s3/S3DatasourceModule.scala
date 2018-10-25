@@ -48,13 +48,14 @@ object S3DatasourceModule extends LightweightDatasourceModule {
     config.as[S3Config].result match {
       case Right(s3Config) =>
         val clientResource = BlazeClientBuilder[F](ec).resource
+        val c = s3.resourceToDisposable(clientResource)
 
-        clientResource.use { client =>
-          val s3Ds = new S3Datasource[F](client, s3Config)
+        c.flatMap { client =>
+          val s3Ds = new S3Datasource[F](client.unsafeValue, s3Config)
           val ds: Datasource[F, Stream[F, ?], ResourcePath] = s3Ds
 
           s3Ds.isLive.ifM({
-            Disposable(ds, s3.resourceCleanup(clientResource)).right.pure[F]
+            Disposable(ds, client.dispose).right.pure[F]
           },
           {
             val msg = "Unable to ListObjects at the root of the bucket"

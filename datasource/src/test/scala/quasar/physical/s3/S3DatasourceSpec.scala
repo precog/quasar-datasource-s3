@@ -209,13 +209,8 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
 
   // FIXME: eliminate inheritance from DatasourceSpec and sequence the resource instead of
   // ignoring clean up here.
-  private def unsafeResource[F[_]: Effect, A](r: Resource[F, A]): F[A] = r match {
-    case Resource.Allocate(a) => a map {
-      case (res, _) => res
-    }
-    case Resource.Bind(r, f) => unsafeResource(r).flatMap(a => unsafeResource(f(a)))
-    case Resource.Suspend(r) => r.flatMap(unsafeResource(_))
-  }
+  private def unsafeResource[F[_]: Effect, A](r: Resource[F, A]): F[A] =
+    s3.resourceToDisposable(r).map(_.unsafeValue)
 }
 
 object S3DatasourceSpec {
