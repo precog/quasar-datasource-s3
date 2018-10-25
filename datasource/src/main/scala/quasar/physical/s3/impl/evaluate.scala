@@ -23,11 +23,11 @@ import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.contrib.pathy._
 import quasar.physical.s3.S3JsonParsing
 
-
 import cats.effect.{Effect, Sync}
 import cats.syntax.applicative._
 import cats.syntax.functor._
 import cats.syntax.flatMap._
+import cats.ApplicativeError
 
 import fs2.{Pipe, Stream}
 import jawn.{Facade, ParseException}
@@ -66,7 +66,7 @@ object evaluate {
 
   ////
 
-  private def parse[F[_], R: Facade](jsonParsing: S3JsonParsing)
+  private def parse[F[_]: ApplicativeError[?[_], Throwable], R: Facade](jsonParsing: S3JsonParsing)
       : Pipe[F, ByteBuffer, R] =
     jsonParsing match {
       case S3JsonParsing.JsonArray => unwrapJsonArray[F, ByteBuffer, R]
@@ -89,23 +89,19 @@ object evaluate {
       msg)
   }
 
-  // There is no method in http4s 0.16.6a that does what we want here, so
-  // we have to implement it ourselves. What we want specifically is to
-  // make an HTTP request, take the response, if it's a 404 raise
-  // ResourceError.PathNotFound.  If the request succeeds we
-  // compute an fs2 stream from it using `f` and then call `dispose` on
-  // that response once we've finished streaming.
   private def streamRequest[F[_]: Sync: MonadResourceErr, A](
-      client: Client[F], req: Request[F], file: AFile)(
-      f: Response[F] => Stream[F, A])
-      (implicit MR: MonadResourceErr[F])
+    client: Client[F], req: Request[F], file: AFile)(
+    f: Response[F] => Stream[F, A])
+    (implicit MR: MonadResourceErr[F])
       : F[Stream[F, A]] =
-    client.open(req).flatMap {
-      case DisposableResponse(response, dispose) =>
-        response.status match {
-          case Status.NotFound => MR.raiseError(ResourceError.pathNotFound(ResourcePath.Leaf(file)))
-          case Status.Ok => f(response).onFinalize(dispose).pure[F]
-          case s => Sync[F].raiseError(new Exception(s"Unexpected status $s"))
-        }
+    s3.resourceToDisposable(client.run(req)).flatMap { disposable =>
+      val response = disposable.unsafeValue
+      val dispose = disposable.dispose
+
+      response.status match {
+        case Status.NotFound => MR.raiseError(ResourceError.pathNotFound(ResourcePath.Leaf(file)))
+        case Status.Ok => f(response).onFinalize(dispose).pure[F]
+        case s => Sync[F].raiseError(new Exception(s"Unexpected status $s"))
+      }
     }
 }

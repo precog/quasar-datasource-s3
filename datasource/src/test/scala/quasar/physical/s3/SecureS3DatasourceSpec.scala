@@ -26,7 +26,7 @@ import scala.io.{Source, Codec}
 import java.io.File
 
 import argonaut.{Parse, DecodeJson}
-import cats.effect.{IO, Sync}
+import cats.effect.IO
 import cats.syntax.flatMap._
 import cats.syntax.applicative._
 import cats.syntax.option._
@@ -38,21 +38,30 @@ import SecureS3DatasourceSpec._
 final class SecureS3DatasourceSpec extends S3DatasourceSpec {
   override val testBucket = Uri.uri("https://s3.amazonaws.com/slamdata-private-test")
 
-  // FIXME: close the file once we update to cats-effect 1.0.0 and
-  // Bracket is available
   override val credentials: IO[Option[S3Credentials]] = {
-    val file = Sync[IO].catchNonFatal(new File("testCredentials.json"))
-    val msg = "Failed to read testCredentials.json"
+    val read = IO {
+      val file = new File(credsFile)
+      val src = Source.fromFile(file)(Codec.UTF8)
 
-    val src = (file >>= (f => IO(Source.fromFile(f)(Codec.UTF8)))).map(_.getLines.mkString)
+      (src.getLines.mkString, src)
+    }
 
-    val jsonConfig = src >>= (p =>
-      Parse.parse(p).toOption.map(_.pure[IO]).getOrElse(IO.raiseError(new Exception(msg))))
+    read.bracket({
+      case (p, _) => {
+        val msg = "Failed to read testCredentials.json"
+        val jsonConfig =
+          Parse.parse(p).toOption.map(_.pure[IO]).getOrElse(IO.raiseError(new Exception(msg)))
 
-    jsonConfig
-      .map(DecodeJson.of[S3Credentials].decodeJson(_))
-      .map(_.toOption) >>= (_.fold[IO[Option[S3Credentials]]](IO.raiseError(new Exception(msg)))(c => c.some.pure[IO]))
+        jsonConfig
+          .map(DecodeJson.of[S3Credentials].decodeJson(_))
+          .map(_.toOption) >>= (_.fold[IO[Option[S3Credentials]]](IO.raiseError(new Exception(msg)))(c => c.some.pure[IO]))
+      }
+    })({
+      case (_, src) => IO(src.close)
+    })
   }
+
+  private val credsFile = "testCredentials.json"
 
   override val datasourceLD =
     run(credentials >>= (creds => mkDatasource[IO](S3JsonParsing.LineDelimited, testBucket, creds)))

@@ -6,7 +6,7 @@ import scala.collection.Seq
 import sbt._
 
 object Dependencies {
-  private val http4sVersion = "0.18.13"
+  private val http4sVersion = "0.19.0-M4"
 
   // hooray, scala-xml. we use it for parsing XML out of
   // the S3 API's responses.
@@ -15,15 +15,15 @@ object Dependencies {
   // used for parsing JSON out of the stream of S3 data
   // in an object.
   // we need to be compatible with Quasar's version of both
-  // fs2 and jawn, so we use the older circe-jawn version.
+  // fs2 and jawn
   private val argonautVersion = "6.2.2"
-  private val catsEffectVersion = "0.10.1"
+  private val catsEffectVersion = "1.0.0"
   private val circeFs2Version = "0.9.0"
   private val circeJawnVersion = "0.9.3"
-  private val fs2Version = "0.10.5"
+  private val fs2Version = "1.0.0"
   private val quasarVersion = IO.read(file("./quasar-version")).trim
   private val qdataVersion = IO.read(file("./qdata-version")).trim
-  private val jawnFs2Version = "0.12.2"
+  private val jawnFs2Version = "0.13.0"
   private val shimsVersion = "1.2.1"
   private val specsVersion = "4.1.2"
 

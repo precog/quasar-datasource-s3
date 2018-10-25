@@ -18,24 +18,28 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 
+import scala.concurrent.ExecutionContext
+
 import cats.effect.IO
 import cats.data.OptionT
 import cats.syntax.applicative._
 import org.http4s.{Uri, Request}
-import org.http4s.client.blaze.Http1Client
+import org.http4s.client.blaze.BlazeClientBuilder
 import org.specs2.mutable.Specification
 import pathy.Path
 
 final class ChildrenSpec extends Specification {
   "lists all resources at the root of the bucket, one per request" >> {
-    val client = Http1Client[IO]()
+    implicit val cs = IO.contextShift(ExecutionContext.global)
     // Force S3 to return a single element per page in ListObjects,
     // to ensure pagination works correctly
     val bucket = Uri.uri("https://s3.amazonaws.com/slamdata-public-test/").withQueryParam("max-keys", "1")
+
     val dir = Path.rootDir
     val sign: Request[IO] => IO[Request[IO]] = _.pure[IO]
+    val client = BlazeClientBuilder[IO](ExecutionContext.global).resource
 
-    OptionT(client.flatMap(impl.children(_, bucket, dir, sign)))
+    OptionT(client.use(impl.children(_, bucket, dir, sign)))
       .getOrElseF(IO.raiseError(new Exception("Could not list children under the root")))
       .flatMap(_.compile.toList).map { children =>
         children.length must_== 4
