@@ -25,7 +25,7 @@ import slamdata.Predef._
 import cats.Show
 import cats.effect.{ExitCase, Resource}
 import eu.timepit.refined.auto._
-import scalaz.{Bind, Monad}
+import scalaz.Monad
 import scalaz.syntax.monad._
 import shims._
 
