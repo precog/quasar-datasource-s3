@@ -16,11 +16,10 @@
 
 package quasar.physical.s3
 
-import quasar.api.QueryEvaluator
 import quasar.api.datasource.DatasourceType
 import quasar.api.resource.ResourcePath.{Leaf, Root}
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
-import quasar.connector.{MonadResourceErr, ResourceError}
+import quasar.connector.{MonadResourceErr, ParsableType, QueryResult, ResourceError}
 import quasar.connector.datasource.LightweightDatasource
 import quasar.contrib.pathy.APath
 import quasar.contrib.scalaz.MonadError_
@@ -36,35 +35,35 @@ import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.option._
 import fs2.Stream
-import jawn.Facade
 import org.http4s.{Request, Header, Headers}
 import org.http4s.client.Client
 import pathy.Path
 import pathy.Path.{DirName, FileName}
-import qdata.QDataEncode
-import qdata.json.QDataFacade
 import scalaz.{\/-, -\/}
 import shims._
 
 final class S3Datasource[F[_]: Effect: MonadResourceErr](
-  client: Client[F],
-  config: S3Config)
-    extends LightweightDatasource[F, Stream[F, ?]] {
+    client: Client[F],
+    config: S3Config)
+    extends LightweightDatasource[F, Stream[F, ?], QueryResult[F]] {
+
+  import ParsableType.JsonVariant
+
   def kind: DatasourceType = s3.datasourceKind
 
-  def evaluator[R: QDataEncode]: QueryEvaluator[F, ResourcePath, Stream[F, R]] =
-    new QueryEvaluator[F, ResourcePath, Stream[F, R]] {
-      implicit val facade: Facade[R] = QDataFacade.qdata[R]
+  def evaluate(path: ResourcePath): F[QueryResult[F]] =
+    path match {
+      case Root =>
+        MonadError_[F, ResourceError].raiseError(ResourceError.notAResource(path))
 
-      val MR = MonadError_[F, ResourceError]
-
-      def evaluate(path: ResourcePath): F[Stream[F, R]] =
-        path match {
-          case Root =>
-            MR.raiseError(ResourceError.notAResource(path))
-          case Leaf(file) =>
-            impl.evaluate[F, R](config.parsing, client, config.bucket, file, signRequest(config))
+      case Leaf(file) =>
+        val jvar = config.parsing match {
+          case S3JsonParsing.JsonArray => JsonVariant.ArrayWrapped
+          case S3JsonParsing.LineDelimited => JsonVariant.LineDelimited
         }
+
+        impl.evaluate[F](client, config.bucket, file, signRequest(config))
+          .map(QueryResult.typed(ParsableType.json(jvar, false), _))
     }
 
   def prefixedChildPaths(path: ResourcePath): F[Option[Stream[F, (ResourceName, ResourcePathType)]]] =

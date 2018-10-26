@@ -17,13 +17,10 @@
 package quasar.physical.s3
 
 import quasar.Disposable
-import quasar.api.datasource.DatasourceError
+import quasar.api.datasource.{DatasourceError, DatasourceType}
 import quasar.api.datasource.DatasourceError.InitializationError
-import quasar.api.datasource.DatasourceType
 import quasar.api.resource.ResourcePath
-import quasar.connector.Datasource
-import quasar.connector.LightweightDatasourceModule
-import quasar.connector.MonadResourceErr
+import quasar.connector.{Datasource, LightweightDatasourceModule, MonadResourceErr, QueryResult}
 
 import scala.concurrent.ExecutionContext
 
@@ -44,7 +41,7 @@ object S3DatasourceModule extends LightweightDatasourceModule {
 
   def lightweightDatasource[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
     config: Json)(implicit ec: ExecutionContext)
-      : F[InitializationError[Json] \/ Disposable[F, Datasource[F, Stream[F, ?], ResourcePath]]] =
+      : F[InitializationError[Json] \/ Disposable[F, Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]]]] =
     config.as[S3Config].result match {
       case Right(s3Config) =>
         val clientResource = BlazeClientBuilder[F](ec).resource
@@ -52,7 +49,7 @@ object S3DatasourceModule extends LightweightDatasourceModule {
 
         c.flatMap { client =>
           val s3Ds = new S3Datasource[F](client.unsafeValue, s3Config)
-          val ds: Datasource[F, Stream[F, ?], ResourcePath] = s3Ds
+          val ds: Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]] = s3Ds
 
           s3Ds.isLive.ifM({
             Disposable(ds, client.dispose).right.pure[F]
