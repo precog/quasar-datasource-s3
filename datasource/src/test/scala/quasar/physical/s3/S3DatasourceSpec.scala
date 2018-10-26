@@ -20,10 +20,11 @@ import slamdata.Predef._
 
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.common.data.Data
-import quasar.connector.{Datasource, DatasourceSpec, MonadResourceErr, ResourceError}
+import quasar.connector.{Datasource, DatasourceSpec, MonadResourceErr, QueryResult, ResourceError}
 import quasar.connector.ResourceError
 import quasar.contrib.scalaz.MonadError_
 
+import java.nio.charset.Charset
 import scala.concurrent.ExecutionContext
 
 import cats.data.{EitherT, OptionT}
@@ -132,31 +133,33 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
 
   "evaluate" >> {
     "read line-delimited JSON" >>* {
-      assertEvaluate(
+      assertResultBytes(
         datasourceLD,
         ResourcePath.root() / ResourceName("testData") / ResourceName("lines.json"),
-        data_12_34)
+        "[1, 2]\n[3, 4]\n".getBytes(Charset.forName("UTF-8")))
     }
 
     "read array JSON" >>* {
-      assertEvaluate(
+      assertResultBytes(
         datasource,
         ResourcePath.root() / ResourceName("testData") / ResourceName("array.json"),
-        data_12_34)
+        "[[1, 2], [3, 4]]\n".getBytes(Charset.forName("UTF-8")))
     }
 
     "read array JSON of resource with special chars in path" >>* {
-      assertEvaluate(
+      assertResultBytes(
         datasource,
         ResourcePath.root() / ResourceName("testData") / ResourceName("á") / ResourceName("βç.json"),
-        data_12_34)
+        "[[1, 2], [3, 4]]\n".getBytes(Charset.forName("UTF-8")))
     }
 
     "read line-delimited JSON with special chars of resource with special chars in path" >>* {
-      assertEvaluate(
+      val esStr = "\"El veloz murciélago hindú comía feliz cardillo y kiwi. La cigüeña tocaba el saxofón detrás del palenque de paja.\"\n"
+
+      assertResultBytes(
         datasourceLD,
         spanishResource,
-        List(Data.Str("El veloz murciélago hindú comía feliz cardillo y kiwi. La cigüeña tocaba el saxofón detrás del palenque de paja.")))
+        esStr.getBytes(Charset.forName("UTF-8")))
     }
 
     "reading a non-existent file raises ResourceError.PathNotFound" >> {
@@ -164,7 +167,7 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
       val ds = creds.flatMap(mkDatasource[G](S3JsonParsing.JsonArray, testBucket, _))
 
       val path = ResourcePath.root() / ResourceName("does-not-exist")
-      val read: G[Stream[G, Data]] = ds.flatMap(_.evaluator[Data].evaluate(path))
+      val read: G[QueryResult[G]] = ds.flatMap(_.evaluate(path))
 
       run(read.value) must beLeft.like {
         case ResourceError.throwableP(ResourceError.PathNotFound(_)) => ok
@@ -172,9 +175,16 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
     }
   }
 
-  def assertEvaluate(ds: Datasource[IO, Stream[IO,?], ResourcePath], path: ResourcePath, expected: List[Data]) =
-    ds.evaluator[Data].evaluate(path).flatMap { res =>
-      gatherMultiple(res).map { _ must_== expected }
+  def assertResultBytes(
+      ds: Datasource[IO, Stream[IO, ?], ResourcePath, QueryResult[IO]],
+      path: ResourcePath,
+      expected: Array[Byte]) =
+    ds.evaluate(path) flatMap {
+      case QueryResult.Typed(_, data) =>
+        data.compile.to[Array].map(_ must_=== expected)
+
+      case _ =>
+        IO(ko("Unexpected QueryResult"))
     }
 
   def assertPrefixedChildPaths(path: ResourcePath, expected: List[(ResourceName, ResourcePathType)]) =
@@ -194,7 +204,7 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
     parsing: S3JsonParsing,
     bucket: Uri,
     creds: Option[S3Credentials])
-      : F[Datasource[F, Stream[F, ?], ResourcePath]] = {
+      : F[Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]]] = {
 
     val ec = ExecutionContext.Implicits.global
     val builder = BlazeClientBuilder[F](ec)
