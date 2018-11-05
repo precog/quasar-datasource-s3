@@ -26,16 +26,13 @@ import quasar.contrib.scalaz.MonadError_
 
 import slamdata.Predef.{Stream => _, _}
 
-import java.time.{OffsetDateTime, ZoneOffset, LocalDateTime}
-
 import cats.data.OptionT
 import cats.effect.Effect
 import cats.syntax.applicative._
-import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.option._
 import fs2.Stream
-import org.http4s.{Request, Header, Headers}
+import org.http4s.Request
 import org.http4s.client.Client
 import pathy.Path
 import pathy.Path.{DirName, FileName}
@@ -107,30 +104,5 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
 
 object S3Datasource {
   def signRequest[F[_]: Effect](c: S3Config): Request[F] => F[Request[F]] =
-    c.credentials match {
-      case Some(creds) => {
-        val requestSigning = for {
-          time <- Effect[F].delay(OffsetDateTime.now())
-          datetime <- Effect[F].catchNonFatal(
-            LocalDateTime.ofEpochSecond(time.toEpochSecond, 0, ZoneOffset.UTC))
-          signing = RequestSigning(
-            Credentials(creds.accessKey, creds.secretKey, None),
-            creds.region,
-            ServiceName.S3,
-            PayloadSigning.Signed,
-            datetime)
-        } yield signing
-
-        req => {
-          // Requests that require signing also require `host` to always be present
-          val req0 = req.uri.host match {
-            case Some(host) => req.withHeaders(Headers(Header("host", host.value)))
-            case None => req
-          }
-
-          requestSigning >>= (_.signedHeaders[F](req0).map(req0.withHeaders(_)))
-        }
-      }
-      case None => req => req.pure[F]
-    }
+    req => req.pure[F]
 }

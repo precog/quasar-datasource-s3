@@ -30,7 +30,6 @@ import fs2.Stream
 import org.http4s.client.Client
 import org.http4s.client.blaze.BlazeClientBuilder
 import org.http4s.client.middleware.FollowRedirect
-import org.http4s.syntax.string._
 import scalaz.{\/, NonEmptyList}
 import scalaz.syntax.either._
 import scalaz.syntax.functor._
@@ -48,7 +47,7 @@ object S3DatasourceModule extends LightweightDatasourceModule {
       : F[InitializationError[Json] \/ Disposable[F, Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]]]] =
     config.as[S3Config].result match {
       case Right(s3Config) =>
-        mkClient[F].flatMap { dc =>
+        mkClient(s3Config).flatMap { dc =>
           val s3Ds = new S3Datasource[F](dc.unsafeValue, s3Config)
           val ds: Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]] = s3Ds
           val msg = "Unable to ListObjects at the root of the bucket"
@@ -81,13 +80,16 @@ object S3DatasourceModule extends LightweightDatasourceModule {
 
   ///
 
-  private def mkClient[F[_]: ConcurrentEffect]
+  private def mkClient[F[_]: ConcurrentEffect](conf: S3Config)
     (implicit ec: ExecutionContext)
       : F[Disposable[F, Client[F]]] = {
+    /* The FollowRedirect middleware should be mounted BEFORE
+       the AwsV4Signing middleware, since redirects need to be signed
+       too */
     val clientResource = BlazeClientBuilder[F](ec).resource
-    val disposableClient = s3.resourceToDisposable(clientResource)
-    val isSensitive = Set("Cookie".ci, "Set-Cookie".ci).contains(_)
+    val redirectClient = clientResource.map(FollowRedirect(3)(_))
+    val signingClient = redirectClient.map(AwsV4Signing(conf)(_))
 
-    disposableClient.map(_.map(FollowRedirect(3, isSensitive)(_)))
+    s3.resourceToDisposable(signingClient)
   }
 }
