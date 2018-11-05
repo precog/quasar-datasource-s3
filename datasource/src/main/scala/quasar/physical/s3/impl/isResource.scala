@@ -51,16 +51,16 @@ object isResource {
     if (Path.identicalPath(Path.rootDir, file)) {
       false.pure[F]
     } else {
+      println("Got here")
       // Don't use the metadata, just check the request status
-      sign(request) >>= (r =>
-        client.status(r) >>= {
-          case Status.Ok => true.pure[F]
-          case Status.PartialContent => true.pure[F]
-          case Status.NotFound => false.pure[F]
-          case Status.RangeNotSatisfiable => false.pure[F]
-          case Status.Forbidden => Effect[F].raiseError(new Exception(s"Permission denied. Make sure you have access to the configured bucket"))
-          case s => Effect[F].raiseError(new Exception(s"Unexpected status returned during `isResource` call: $s"))
-        })
+      sign(request) >>= (client.status(_)) >>= {
+        case Status.Ok => true.pure[F]
+        case Status.PartialContent => true.pure[F]
+        case Status.NotFound => false.pure[F]
+        case Status.RangeNotSatisfiable => false.pure[F]
+        case Status.Forbidden => Effect[F].raiseError(new Exception(s"Permission denied. Make sure you have access to the configured bucket"))
+        case s => Effect[F].raiseError(new Exception(s"Unexpected status returned during `isResource` call: $s"))
+      }
     }
   }
 }

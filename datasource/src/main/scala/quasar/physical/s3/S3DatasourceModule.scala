@@ -27,9 +27,13 @@ import scala.concurrent.ExecutionContext
 import argonaut.{EncodeJson, Json}
 import cats.effect.{ConcurrentEffect, ContextShift, Timer}
 import fs2.Stream
+import org.http4s.client.Client
 import org.http4s.client.blaze.BlazeClientBuilder
+import org.http4s.client.middleware.FollowRedirect
+import org.http4s.syntax.string._
 import scalaz.{\/, NonEmptyList}
 import scalaz.syntax.either._
+import scalaz.syntax.functor._
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
 import cats.syntax.option._
@@ -44,23 +48,16 @@ object S3DatasourceModule extends LightweightDatasourceModule {
       : F[InitializationError[Json] \/ Disposable[F, Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]]]] =
     config.as[S3Config].result match {
       case Right(s3Config) =>
-        val clientResource = BlazeClientBuilder[F](ec).resource
-        val c = s3.resourceToDisposable(clientResource)
-
-        c.flatMap { client =>
-          val s3Ds = new S3Datasource[F](client.unsafeValue, s3Config)
+        mkClient[F].flatMap { dc =>
+          val s3Ds = new S3Datasource[F](dc.unsafeValue, s3Config)
           val ds: Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]] = s3Ds
+          val msg = "Unable to ListObjects at the root of the bucket"
 
-          s3Ds.isLive.ifM({
-            Disposable(ds, client.dispose).right.pure[F]
-          },
-          {
-            val msg = "Unable to ListObjects at the root of the bucket"
-
+          s3Ds.isLive.ifM(
+            Disposable(ds, dc.dispose).right.pure[F],
             DatasourceError
               .accessDenied[Json, InitializationError[Json]](kind, config, msg)
-              .left.pure[F]
-          })
+              .left.pure[F])
         }
 
       case Left((msg, _)) =>
@@ -80,5 +77,17 @@ object S3DatasourceModule extends LightweightDatasourceModule {
       // ignore the existing credentials and replace them with redactedCreds
       c.credentials.fold(c)(_ => c.copy(credentials = redactedCreds.some)))
       .fold(config)(rc => EncodeJson.of[S3Config].encode(rc))
+  }
+
+  ///
+
+  private def mkClient[F[_]: ConcurrentEffect]
+    (implicit ec: ExecutionContext)
+      : F[Disposable[F, Client[F]]] = {
+    val clientResource = BlazeClientBuilder[F](ec).resource
+    val disposableClient = s3.resourceToDisposable(clientResource)
+    val isSensitive = Set("Cookie".ci, "Set-Cookie".ci).contains(_)
+
+    disposableClient.map(_.map(FollowRedirect(3, isSensitive)(_)))
   }
 }
