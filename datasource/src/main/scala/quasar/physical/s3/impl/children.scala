@@ -152,7 +152,7 @@ object children {
     val ct0 = ct.map(_.value).map(("continuation-token", _))
 
     val q = Query.fromString(s3EncodeQueryParams(
-      List(delimiter, listType, prefix, ct0).unite.toMap))
+      List(listType, delimiter, prefix, ct0).unite.toMap))
 
     Request[F](uri = listingQuery.copy(query = q))
   }

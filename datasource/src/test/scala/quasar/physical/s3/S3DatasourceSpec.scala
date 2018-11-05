@@ -211,10 +211,10 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
     val ec = ExecutionContext.Implicits.global
     val builder = BlazeClientBuilder[F](ec)
     val client = unsafeResource(builder.resource)
-    val redirectClient = client.map(FollowRedirect(3)(_))
-    val signingClient = redirectClient.map(AwsV4Signing(testConfig))
+    val signingClient = client.map(AwsV4Signing(testConfig))
+    val redirectClient = signingClient.map(FollowRedirect(3)(_))
 
-    signingClient map (new S3Datasource[F](_, S3Config(bucket, parsing, creds)))
+    redirectClient map (new S3Datasource[F](_, S3Config(bucket, parsing, creds)))
   }
 
   val datasourceLD = run(mkDatasource[IO](S3JsonParsing.LineDelimited, testBucket, None))

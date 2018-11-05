@@ -30,6 +30,7 @@ import fs2.Stream
 import org.http4s.client.Client
 import org.http4s.client.blaze.BlazeClientBuilder
 import org.http4s.client.middleware.FollowRedirect
+import org.http4s.util.CaseInsensitiveString
 import scalaz.{\/, NonEmptyList}
 import scalaz.syntax.either._
 import scalaz.syntax.functor._
@@ -83,13 +84,14 @@ object S3DatasourceModule extends LightweightDatasourceModule {
   private def mkClient[F[_]: ConcurrentEffect](conf: S3Config)
     (implicit ec: ExecutionContext)
       : F[Disposable[F, Client[F]]] = {
-    /* The FollowRedirect middleware should be mounted BEFORE
+    /* The FollowRedirect middleware should be mounted AFTER
        the AwsV4Signing middleware, since redirects need to be signed
        too */
+    val isSensitive = (_: CaseInsensitiveString) => false
     val clientResource = BlazeClientBuilder[F](ec).resource
-    val redirectClient = clientResource.map(FollowRedirect(3)(_))
-    val signingClient = redirectClient.map(AwsV4Signing(conf)(_))
+    val signingClient = clientResource.map(AwsV4Signing(conf)(_))
+    val redirectClient = signingClient.map(FollowRedirect(3, isSensitive)(_))
 
-    s3.resourceToDisposable(signingClient)
+    s3.resourceToDisposable(redirectClient)
   }
 }
