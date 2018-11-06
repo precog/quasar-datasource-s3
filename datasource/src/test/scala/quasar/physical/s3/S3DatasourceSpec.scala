@@ -33,7 +33,6 @@ import cats.syntax.applicative._
 import cats.syntax.functor._
 import fs2.Stream
 import org.http4s.client.blaze.BlazeClientBuilder
-import org.http4s.client.middleware.FollowRedirect
 import org.http4s.Uri
 import scalaz.{Id, ~>}, Id.Id
 import shims._
@@ -212,9 +211,8 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
     val builder = BlazeClientBuilder[F](ec)
     val client = unsafeResource(builder.resource)
     val signingClient = client.map(AwsV4Signing(testConfig))
-    val redirectClient = signingClient.map(FollowRedirect(3)(_))
 
-    redirectClient map (new S3Datasource[F](_, S3Config(bucket, parsing, creds)))
+    signingClient map (new S3Datasource[F](_, S3Config(bucket, parsing, creds)))
   }
 
   val datasourceLD = run(mkDatasource[IO](S3JsonParsing.LineDelimited, testBucket, None))

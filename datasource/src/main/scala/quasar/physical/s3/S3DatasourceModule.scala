@@ -21,6 +21,7 @@ import quasar.api.datasource.{DatasourceError, DatasourceType}
 import quasar.api.datasource.DatasourceError.InitializationError
 import quasar.api.resource.ResourcePath
 import quasar.connector.{Datasource, LightweightDatasourceModule, MonadResourceErr, QueryResult}
+import quasar.physical.s3.S3Datasource.{Live, NotLive, Redirected}
 
 import scala.concurrent.ExecutionContext
 
@@ -29,8 +30,6 @@ import cats.effect.{ConcurrentEffect, ContextShift, Timer}
 import fs2.Stream
 import org.http4s.client.Client
 import org.http4s.client.blaze.BlazeClientBuilder
-import org.http4s.client.middleware.FollowRedirect
-import org.http4s.util.CaseInsensitiveString
 import scalaz.{\/, NonEmptyList}
 import scalaz.syntax.either._
 import scalaz.syntax.functor._
@@ -48,16 +47,24 @@ object S3DatasourceModule extends LightweightDatasourceModule {
       : F[InitializationError[Json] \/ Disposable[F, Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]]]] =
     config.as[S3Config].result match {
       case Right(s3Config) =>
-        mkClient(s3Config).flatMap { dc =>
-          val s3Ds = new S3Datasource[F](dc.unsafeValue, s3Config)
-          val ds: Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]] = s3Ds
-          val msg = "Unable to ListObjects at the root of the bucket"
+        mkClient(s3Config).flatMap { disposableClient =>
+          val s3Ds = new S3Datasource[F](disposableClient.unsafeValue, s3Config)
 
-          s3Ds.isLive.ifM(
-            Disposable(ds, dc.dispose).right.pure[F],
-            DatasourceError
-              .accessDenied[Json, InitializationError[Json]](kind, config, msg)
-              .left.pure[F])
+          s3Ds.isLive map {
+            case Redirected(newConfig) =>
+              val ds: Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]] =
+                new S3Datasource[F](disposableClient.unsafeValue, newConfig)
+              Disposable(ds, disposableClient.dispose).right
+            case Live =>
+              val ds: Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]] =
+                new S3Datasource[F](disposableClient.unsafeValue, s3Config)
+              Disposable(ds, disposableClient.dispose).right
+            case NotLive =>
+              val msg = "Unable to ListObjects at the root of the bucket"
+              DatasourceError
+                .accessDenied[Json, InitializationError[Json]](kind, config, msg)
+                .left
+          }
         }
 
       case Left((msg, _)) =>
@@ -84,14 +91,9 @@ object S3DatasourceModule extends LightweightDatasourceModule {
   private def mkClient[F[_]: ConcurrentEffect](conf: S3Config)
     (implicit ec: ExecutionContext)
       : F[Disposable[F, Client[F]]] = {
-    /* The FollowRedirect middleware should be mounted AFTER
-       the AwsV4Signing middleware, since redirects need to be signed
-       too */
-    val isSensitive = (_: CaseInsensitiveString) => false
     val clientResource = BlazeClientBuilder[F](ec).resource
     val signingClient = clientResource.map(AwsV4Signing(conf)(_))
-    val redirectClient = signingClient.map(FollowRedirect(3, isSensitive)(_))
 
-    s3.resourceToDisposable(redirectClient)
+    s3.resourceToDisposable(signingClient)
   }
 }

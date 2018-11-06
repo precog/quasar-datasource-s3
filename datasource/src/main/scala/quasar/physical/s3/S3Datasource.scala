@@ -29,6 +29,7 @@ import slamdata.Predef.{Stream => _, _}
 import cats.data.OptionT
 import cats.effect.Effect
 import cats.syntax.applicative._
+import cats.syntax.apply._
 import cats.syntax.functor._
 import cats.syntax.option._
 import fs2.Stream
@@ -44,6 +45,7 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
     extends LightweightDatasource[F, Stream[F, ?], QueryResult[F]] {
 
   import ParsableType.JsonVariant
+  import S3Datasource._
 
   def kind: DatasourceType = s3.datasourceKind
 
@@ -81,8 +83,16 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
     }
   }
 
-  def isLive: F[Boolean] =
-    OptionT(prefixedChildPaths(ResourcePath.Root)).isDefined
+  def isLive: F[Liveness] = {
+    val listing = OptionT(prefixedChildPaths(ResourcePath.Root)).isDefined
+    val live = impl.isLive(client, config)
+
+    (listing, live).mapN {
+      case (true, None) => Liveness.live
+      case (false, Some(newConfig)) => Liveness.redirected(newConfig)
+      case _ => Liveness.notLive
+    }
+  }
 
   //
 
@@ -92,4 +102,17 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
       case Some((d, -\/(DirName(dn)))) if dn.isEmpty => d
       case _ => path
     }
+}
+
+object S3Datasource {
+  sealed abstract class Liveness
+  final case class Redirected(conf: S3Config) extends Liveness
+  final case object Live extends Liveness
+  final case object NotLive extends Liveness
+
+  object Liveness {
+    def live: Liveness = Live
+    def notLive: Liveness = NotLive
+    def redirected(conf: S3Config): Liveness = Redirected(conf)
+  }
 }

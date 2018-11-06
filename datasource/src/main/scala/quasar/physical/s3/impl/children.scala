@@ -32,11 +32,9 @@ import cats.instances.list._
 import cats.instances.option._
 import cats.instances.tuple._
 import cats.syntax.alternative._
-import cats.syntax.applicative._
 import cats.syntax.bifunctor._
 import cats.syntax.either._
 import cats.syntax.eq._
-import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.option._
 import cats.syntax.traverse._
@@ -82,16 +80,8 @@ object children {
 
   ///
 
-  // converts non-recoverable errors to runtime errors. Also decide
-  // which errors we want to report as None rather than runtime exceptions.
-  private def handleS3[F[_]: Sync, A](e: EitherT[F, S3Error, A]): OptionT[F, A] =
-    OptionT(e.value.flatMap {
-      case Left(S3Error.NotFound) => none.pure[F]
-      case Left(S3Error.Forbidden) => none.pure[F]
-      case Left(S3Error.MalformedResponse) => none.pure[F]
-      case Left(S3Error.UnexpectedResponse(msg)) => Sync[F].raiseError(new Exception(msg))
-      case Right(a) => a.some.pure[F]
-    })
+  private def handleS3[F[_]: Sync, A](e: EitherT[F, S3Error, A])
+      : OptionT[F, A] = e.toOption
 
   // FIXME parse the results as they arrive using an XML streaming parser, instead of paging
   // one response at a time
@@ -106,8 +96,8 @@ object children {
       .map(_.leftMap(Stream.emits(_)))
 
   private def toPathSegment[F[_]](s: Stream[F, APath], dir: APath): Stream[F, PathSegment] =
-    s.filter(path => Path.parentDir(path) === pathToDir(dir))
-      .filter(path => path =!= dir)
+    s.filter(Path.parentDir(_) === pathToDir(dir))
+      .filter(_ =!= dir)
       .flatMap(p => Stream.emits(Path.peel(p).toList))
       .map(_._2)
 
@@ -118,10 +108,14 @@ object children {
     next: Option[ContinuationToken])
       : EitherT[F, S3Error, Elem] =
     EitherT(Sync[F].recover[Either[S3Error, Elem]](
-      client.expect(listingRequest(client, bucket, dir, next))(utf8Xml).map(_.asRight))({
-        case UnexpectedStatus(Status.Forbidden) => S3Error.Forbidden.asLeft[Elem]
-        case MalformedMessageBodyFailure(_, _) => S3Error.MalformedResponse.asLeft[Elem]
-      }))
+      client.expect(listingRequest(client, bucket, dir, next))(utf8Xml).map(_.asRight)) {
+      case UnexpectedStatus(Status.Forbidden) =>
+        S3Error.Forbidden.asLeft[Elem]
+      case UnexpectedStatus(Status.MovedPermanently) =>
+        S3Error.UnexpectedResponse(Status.MovedPermanently.reason).asLeft[Elem]
+      case MalformedMessageBodyFailure(_, _) =>
+        S3Error.MalformedResponse.asLeft[Elem]
+    })
 
   private def listingRequest[F[_]](
     client: Client[F],
