@@ -27,7 +27,7 @@ import org.http4s.client.Client
 import org.http4s.headers.Location
 import org.http4s.{Method, Request, Status}
 
-object isLive {
+object preflightCheck {
   def apply[F[_]: Applicative](client: Client[F], config: S3Config): F[Option[S3Config]] = {
     client.fetch(Request[F](uri = config.bucket, method = Method.HEAD))(resp => resp.status match {
       case Status.Ok => none.pure[F]

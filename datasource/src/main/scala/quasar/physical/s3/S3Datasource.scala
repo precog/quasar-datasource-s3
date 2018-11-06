@@ -85,7 +85,7 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
 
   def isLive: F[Liveness] = {
     val listing = OptionT(prefixedChildPaths(ResourcePath.Root)).isDefined
-    val live = impl.isLive(client, config)
+    val live = impl.preflightCheck(client, config)
 
     (listing, live).mapN {
       case (true, None) => Liveness.live
