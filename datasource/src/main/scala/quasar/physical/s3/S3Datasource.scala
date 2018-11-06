@@ -32,7 +32,6 @@ import cats.syntax.applicative._
 import cats.syntax.functor._
 import cats.syntax.option._
 import fs2.Stream
-import org.http4s.Request
 import org.http4s.client.Client
 import pathy.Path
 import pathy.Path.{DirName, FileName}
@@ -59,16 +58,12 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
           case S3JsonParsing.LineDelimited => JsonVariant.LineDelimited
         }
 
-        impl.evaluate[F](client, config.bucket, file, signRequest(config))
+        impl.evaluate[F](client, config.bucket, file)
           .map(QueryResult.typed(ParsableType.json(jvar, false), _))
     }
 
   def prefixedChildPaths(path: ResourcePath): F[Option[Stream[F, (ResourceName, ResourcePathType)]]] =
-    impl.children(
-      client,
-      config.bucket,
-      dropEmpty(path.toPath),
-      signRequest(config)) map {
+    impl.children(client, config.bucket, dropEmpty(path.toPath)) map {
       case None =>
         none[Stream[F, (ResourceName, ResourcePathType)]]
       case Some(paths) =>
@@ -82,7 +77,7 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
     case Root => false.pure[F]
     case Leaf(file) => Path.refineType(dropEmpty(file)) match {
       case -\/(_) => false.pure[F]
-      case \/-(f) => impl.isResource(client, config.bucket, f, signRequest(config))
+      case \/-(f) => impl.isResource(client, config.bucket, f)
     }
   }
 
@@ -97,12 +92,4 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
       case Some((d, -\/(DirName(dn)))) if dn.isEmpty => d
       case _ => path
     }
-
-  private def signRequest(c: S3Config): Request[F] => F[Request[F]] =
-    S3Datasource.signRequest(c)
-}
-
-object S3Datasource {
-  def signRequest[F[_]: Effect](c: S3Config): Request[F] => F[Request[F]] =
-    req => req.pure[F]
 }

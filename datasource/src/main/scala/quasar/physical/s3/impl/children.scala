@@ -62,18 +62,14 @@ object children {
   // sends them in.
   //
   // FIXME: dir should be ADir and pathToDir should be deleted
-  def apply[F[_]: Effect](
-    client: Client[F],
-    bucket: Uri,
-    dir: APath,
-    sign: Request[F] => F[Request[F]])
+  def apply[F[_]: Effect](client: Client[F], bucket: Uri, dir: APath)
       : F[Option[Stream[F, PathSegment]]] = {
     val msg = "Unexpected failure when streaming a multi-page response for ListBuckets"
     val stream0 =
-      handleS3(fetchResults(client, bucket, dir, None, sign)) map (results =>
+      handleS3(fetchResults(client, bucket, dir, None)) map (results =>
         Stream.iterateEval(results) {
           case (_, next0) =>
-            handleS3(fetchResults(client, bucket, dir, next0, sign))
+            handleS3(fetchResults(client, bucket, dir, next0))
               .getOrElseF(Sync[F].raiseError(new Exception(msg)))
         })
 
@@ -103,10 +99,9 @@ object children {
     client: Client[F],
     bucket: Uri,
     dir: APath,
-    next: Option[ContinuationToken],
-    sign: Request[F] => F[Request[F]])
+    next: Option[ContinuationToken])
       : EitherT[F, S3Error, (Stream[F, APath], Option[ContinuationToken])] =
-    listObjects(client, bucket, dir, next, sign)
+    listObjects(client, bucket, dir, next)
       .flatMap(extractList(_).toEitherT)
       .map(_.leftMap(Stream.emits(_)))
 
@@ -120,15 +115,13 @@ object children {
     client: Client[F],
     bucket: Uri,
     dir: APath,
-    next: Option[ContinuationToken],
-    sign: Request[F] => F[Request[F]])
+    next: Option[ContinuationToken])
       : EitherT[F, S3Error, Elem] =
-    EitherT(sign(listingRequest(client, bucket, dir, next)).flatMap { r =>
-      Sync[F].recover[Either[S3Error, Elem]](client.expect[Elem](r)(utf8Xml).map(_.asRight)) {
-        case UnexpectedStatus(Status.Forbidden) => S3Error.Forbidden.asLeft
-        case MalformedMessageBodyFailure(_, _) => S3Error.MalformedResponse.asLeft
-      }
-    })
+    EitherT(Sync[F].recover[Either[S3Error, Elem]](
+      client.expect(listingRequest(client, bucket, dir, next))(utf8Xml).map(_.asRight))({
+        case UnexpectedStatus(Status.Forbidden) => S3Error.Forbidden.asLeft[Elem]
+        case MalformedMessageBodyFailure(_, _) => S3Error.MalformedResponse.asLeft[Elem]
+      }))
 
   private def listingRequest[F[_]](
     client: Client[F],

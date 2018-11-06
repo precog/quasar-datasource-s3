@@ -34,12 +34,8 @@ import shims._
 
 object evaluate {
 
-  def apply[F[_]: Effect](
-      client: Client[F],
-      uri: Uri,
-      file: AFile,
-      sign: Request[F] => F[Request[F]])
-      (implicit MR: MonadResourceErr[F])
+  def apply[F[_]: Effect](client: Client[F], uri: Uri, file: AFile)
+    (implicit MR: MonadResourceErr[F])
       : F[Stream[F, Byte]] = {
     // Convert the pathy Path to a POSIX path, dropping
     // the first slash, which is what S3 expects for object paths
@@ -48,7 +44,7 @@ object evaluate {
     val queryUri = appendPathS3Encoded(uri, objectPath)
     val request = Request[F](uri = queryUri)
 
-    sign(request) >>= (streamRequest[F, Byte](client, _, file)(_.body))
+    streamRequest[F, Byte](client, request, file)(_.body)
   }
 
   ////

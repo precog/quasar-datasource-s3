@@ -221,9 +221,6 @@ object AwsV4Signing {
           } yield signing
 
           req => {
-            println("-------------------------------------------")
-            println(s"Request: $req")
-            println("-------------------------------------------")
             // Requests that require signing also require `host` to always be present
             val req0 = req.uri.host match {
               case Some(host) => req.withHeaders(Headers(Header("host", host.value)))
