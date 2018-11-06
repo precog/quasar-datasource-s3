@@ -45,7 +45,7 @@ object S3DatasourceModule extends LightweightDatasourceModule {
     config.as[S3Config].result match {
       case Right(s3Config) =>
         val clientResource = BlazeClientBuilder[F](ec).resource
-        val c = s3.resourceToDisposable(clientResource)
+        val c = Disposable.fromResource(clientResource)
 
         c.flatMap { client =>
           val s3Ds = new S3Datasource[F](client.unsafeValue, s3Config)

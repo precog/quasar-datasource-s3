@@ -18,6 +18,7 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 
+import quasar.Disposable
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.common.data.Data
 import quasar.connector.{Datasource, DatasourceSpec, MonadResourceErr, QueryResult, ResourceError}
@@ -219,7 +220,7 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
   // FIXME: eliminate inheritance from DatasourceSpec and sequence the resource instead of
   // ignoring clean up here.
   private def unsafeResource[F[_]: Effect, A](r: Resource[F, A]): F[A] =
-    s3.resourceToDisposable(r).map(_.unsafeValue)
+    Disposable.fromResource(r).map(_.unsafeValue)
 }
 
 object S3DatasourceSpec {
