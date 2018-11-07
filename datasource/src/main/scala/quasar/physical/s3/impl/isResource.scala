@@ -32,7 +32,8 @@ import pathy.Path
 // The simplest method to implement, check that HEAD doesn't
 // give a 404.
 object isResource {
-  def apply[F[_]: Effect](client: Client[F], uri: Uri, file: AFile, sign: Request[F] => F[Request[F]]): F[Boolean] = {
+  def apply[F[_]: Effect](client: Client[F], uri: Uri, file: AFile)
+      : F[Boolean] = {
 
     // Print pathy.Path as POSIX path, without leading slash,
     // for S3's consumption.
@@ -52,15 +53,14 @@ object isResource {
       false.pure[F]
     } else {
       // Don't use the metadata, just check the request status
-      sign(request) >>= (r =>
-        client.status(r) >>= {
-          case Status.Ok => true.pure[F]
-          case Status.PartialContent => true.pure[F]
-          case Status.NotFound => false.pure[F]
-          case Status.RangeNotSatisfiable => false.pure[F]
-          case Status.Forbidden => Effect[F].raiseError(new Exception(s"Permission denied. Make sure you have access to the configured bucket"))
-          case s => Effect[F].raiseError(new Exception(s"Unexpected status returned during `isResource` call: $s"))
-        })
+      client.status(request) >>= {
+        case Status.Ok => true.pure[F]
+        case Status.PartialContent => true.pure[F]
+        case Status.NotFound => false.pure[F]
+        case Status.RangeNotSatisfiable => false.pure[F]
+        case Status.Forbidden => Effect[F].raiseError(new Exception(s"Permission denied. Make sure you have access to the configured bucket"))
+        case s => Effect[F].raiseError(new Exception(s"Unexpected status returned during `isResource` call: $s"))
+      }
     }
   }
 }

@@ -21,15 +21,18 @@ import quasar.api.datasource.{DatasourceError, DatasourceType}
 import quasar.api.datasource.DatasourceError.InitializationError
 import quasar.api.resource.ResourcePath
 import quasar.connector.{Datasource, LightweightDatasourceModule, MonadResourceErr, QueryResult}
+import quasar.physical.s3.S3Datasource.{Live, NotLive, Redirected}
 
 import scala.concurrent.ExecutionContext
 
 import argonaut.{EncodeJson, Json}
 import cats.effect.{ConcurrentEffect, ContextShift, Timer}
 import fs2.Stream
+import org.http4s.client.Client
 import org.http4s.client.blaze.BlazeClientBuilder
 import scalaz.{\/, NonEmptyList}
 import scalaz.syntax.either._
+import scalaz.syntax.functor._
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
 import cats.syntax.option._
@@ -44,23 +47,24 @@ object S3DatasourceModule extends LightweightDatasourceModule {
       : F[InitializationError[Json] \/ Disposable[F, Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]]]] =
     config.as[S3Config].result match {
       case Right(s3Config) =>
-        val clientResource = BlazeClientBuilder[F](ec).resource
-        val c = Disposable.fromResource(clientResource)
+        mkClient(s3Config).flatMap { disposableClient =>
+          val s3Ds = new S3Datasource[F](disposableClient.unsafeValue, s3Config)
 
-        c.flatMap { client =>
-          val s3Ds = new S3Datasource[F](client.unsafeValue, s3Config)
-          val ds: Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]] = s3Ds
-
-          s3Ds.isLive.ifM({
-            Disposable(ds, client.dispose).right.pure[F]
-          },
-          {
-            val msg = "Unable to ListObjects at the root of the bucket"
-
-            DatasourceError
-              .accessDenied[Json, InitializationError[Json]](kind, config, msg)
-              .left.pure[F]
-          })
+          s3Ds.isLive map {
+            case Redirected(newConfig) =>
+              val ds: Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]] =
+                new S3Datasource[F](disposableClient.unsafeValue, newConfig)
+              Disposable(ds, disposableClient.dispose).right
+            case Live =>
+              val ds: Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]] =
+                new S3Datasource[F](disposableClient.unsafeValue, s3Config)
+              Disposable(ds, disposableClient.dispose).right
+            case NotLive =>
+              val msg = "Unable to ListObjects at the root of the bucket"
+              DatasourceError
+                .accessDenied[Json, InitializationError[Json]](kind, config, msg)
+                .left
+          }
         }
 
       case Left((msg, _)) =>
@@ -80,5 +84,17 @@ object S3DatasourceModule extends LightweightDatasourceModule {
       // ignore the existing credentials and replace them with redactedCreds
       c.credentials.fold(c)(_ => c.copy(credentials = redactedCreds.some)))
       .fold(config)(rc => EncodeJson.of[S3Config].encode(rc))
+  }
+
+  ///
+
+  private def mkClient[F[_]: ConcurrentEffect](conf: S3Config)
+      (implicit ec: ExecutionContext)
+      : F[Disposable[F, Client[F]]] = {
+
+    val clientResource = BlazeClientBuilder[F](ec).resource
+    val signingClient = clientResource.map(AwsV4Signing(conf))
+
+    Disposable.fromResource(signingClient)
   }
 }
