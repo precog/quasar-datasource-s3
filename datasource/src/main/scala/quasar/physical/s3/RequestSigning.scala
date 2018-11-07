@@ -21,16 +21,17 @@ import quasar.physical.s3.impl.s3EncodeQueryParams
 
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
-import java.time.LocalDateTime
+import java.time.{LocalDateTime, OffsetDateTime, ZoneOffset}
 import java.time.format.DateTimeFormatter
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
-import cats.effect.Sync
+import cats.effect.{Bracket, Effect, Resource, Sync}
 import cats.implicits._
 import fs2.Stream
+import org.http4s.client.Client
 import org.http4s.headers.{Authorization, Date}
-import org.http4s.{Header, Headers, Method, Request, Uri}
+import org.http4s.{Header, Headers, Method, Request, Response, Uri}
 
 /**
   * Extracted from aws4s: https://github.com/aws4s/aws4s
@@ -200,4 +201,41 @@ object PayloadSigning {
 
   /** Payload is not signed. Use only if consuming the payload twice would be problematic. */
   case object Unsigned extends PayloadSigning
+}
+
+object AwsV4Signing {
+  def apply[F[_]: Bracket[?[_], Throwable]: Effect](conf: S3Config)(client: Client[F]): Client[F] = {
+    def signRequest: Request[F] => F[Request[F]] =
+      conf.credentials match {
+        case Some(creds) => {
+          val requestSigning = for {
+            time <- Effect[F].delay(OffsetDateTime.now())
+            datetime <- Effect[F].catchNonFatal(
+              LocalDateTime.ofEpochSecond(time.toEpochSecond, 0, ZoneOffset.UTC))
+            signing = RequestSigning(
+              Credentials(creds.accessKey, creds.secretKey, None),
+              creds.region,
+              ServiceName.S3,
+              PayloadSigning.Signed,
+              datetime)
+          } yield signing
+
+          req => {
+            // Requests that require signing also require `host` to always be present
+            val req0 = req.uri.host match {
+              case Some(host) => req.withHeaders(Headers(Header("host", host.value)))
+              case None => req
+            }
+
+            requestSigning >>= (_.signedHeaders[F](req0).map(req0.withHeaders(_)))
+          }
+        }
+        case None => req => req.pure[F]
+      }
+
+    def signAndSubmit: Request[F] => Resource[F, Response[F]] =
+      (req => Resource.suspend(signRequest(req).map(client.run(_))))
+
+    Client(signAndSubmit)
+  }
 }

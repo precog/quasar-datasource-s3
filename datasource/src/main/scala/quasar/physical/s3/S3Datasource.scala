@@ -26,16 +26,13 @@ import quasar.contrib.scalaz.MonadError_
 
 import slamdata.Predef.{Stream => _, _}
 
-import java.time.{OffsetDateTime, ZoneOffset, LocalDateTime}
-
 import cats.data.OptionT
 import cats.effect.Effect
 import cats.syntax.applicative._
-import cats.syntax.flatMap._
+import cats.syntax.apply._
 import cats.syntax.functor._
 import cats.syntax.option._
 import fs2.Stream
-import org.http4s.{Request, Header, Headers}
 import org.http4s.client.Client
 import pathy.Path
 import pathy.Path.{DirName, FileName}
@@ -48,6 +45,7 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
     extends LightweightDatasource[F, Stream[F, ?], QueryResult[F]] {
 
   import ParsableType.JsonVariant
+  import S3Datasource._
 
   def kind: DatasourceType = s3.datasourceKind
 
@@ -62,16 +60,12 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
           case S3JsonParsing.LineDelimited => JsonVariant.LineDelimited
         }
 
-        impl.evaluate[F](client, config.bucket, file, signRequest(config))
+        impl.evaluate[F](client, config.bucket, file)
           .map(QueryResult.typed(ParsableType.json(jvar, false), _))
     }
 
   def prefixedChildPaths(path: ResourcePath): F[Option[Stream[F, (ResourceName, ResourcePathType)]]] =
-    impl.children(
-      client,
-      config.bucket,
-      dropEmpty(path.toPath),
-      signRequest(config)) map {
+    impl.children(client, config.bucket, dropEmpty(path.toPath)) map {
       case None =>
         none[Stream[F, (ResourceName, ResourcePathType)]]
       case Some(paths) =>
@@ -85,12 +79,20 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
     case Root => false.pure[F]
     case Leaf(file) => Path.refineType(dropEmpty(file)) match {
       case -\/(_) => false.pure[F]
-      case \/-(f) => impl.isResource(client, config.bucket, f, signRequest(config))
+      case \/-(f) => impl.isResource(client, config.bucket, f)
     }
   }
 
-  def isLive: F[Boolean] =
-    OptionT(prefixedChildPaths(ResourcePath.Root)).isDefined
+  def isLive: F[Liveness] = {
+    val listing = OptionT(prefixedChildPaths(ResourcePath.Root)).isDefined
+    val live = impl.preflightCheck(client, config)
+
+    (listing, live).mapN {
+      case (true, None) => Liveness.live
+      case (false, Some(newConfig)) => Liveness.redirected(newConfig)
+      case _ => Liveness.notLive
+    }
+  }
 
   //
 
@@ -100,37 +102,17 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
       case Some((d, -\/(DirName(dn)))) if dn.isEmpty => d
       case _ => path
     }
-
-  private def signRequest(c: S3Config): Request[F] => F[Request[F]] =
-    S3Datasource.signRequest(c)
 }
 
 object S3Datasource {
-  def signRequest[F[_]: Effect](c: S3Config): Request[F] => F[Request[F]] =
-    c.credentials match {
-      case Some(creds) => {
-        val requestSigning = for {
-          time <- Effect[F].delay(OffsetDateTime.now())
-          datetime <- Effect[F].catchNonFatal(
-            LocalDateTime.ofEpochSecond(time.toEpochSecond, 0, ZoneOffset.UTC))
-          signing = RequestSigning(
-            Credentials(creds.accessKey, creds.secretKey, None),
-            creds.region,
-            ServiceName.S3,
-            PayloadSigning.Signed,
-            datetime)
-        } yield signing
+  sealed abstract class Liveness
+  final case class Redirected(conf: S3Config) extends Liveness
+  final case object Live extends Liveness
+  final case object NotLive extends Liveness
 
-        req => {
-          // Requests that require signing also require `host` to always be present
-          val req0 = req.uri.host match {
-            case Some(host) => req.withHeaders(Headers(Header("host", host.value)))
-            case None => req
-          }
-
-          requestSigning >>= (_.signedHeaders[F](req0).map(req0.withHeaders(_)))
-        }
-      }
-      case None => req => req.pure[F]
-    }
+  object Liveness {
+    def live: Liveness = Live
+    def notLive: Liveness = NotLive
+    def redirected(conf: S3Config): Liveness = Redirected(conf)
+  }
 }

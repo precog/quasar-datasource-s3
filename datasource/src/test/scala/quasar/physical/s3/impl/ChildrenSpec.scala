@@ -22,8 +22,7 @@ import scala.concurrent.ExecutionContext
 
 import cats.effect.IO
 import cats.data.OptionT
-import cats.syntax.applicative._
-import org.http4s.{Uri, Request}
+import org.http4s.Uri
 import org.http4s.client.blaze.BlazeClientBuilder
 import org.specs2.mutable.Specification
 import pathy.Path
@@ -36,10 +35,9 @@ final class ChildrenSpec extends Specification {
     val bucket = Uri.uri("https://s3.amazonaws.com/slamdata-public-test/").withQueryParam("max-keys", "1")
 
     val dir = Path.rootDir
-    val sign: Request[IO] => IO[Request[IO]] = _.pure[IO]
     val client = BlazeClientBuilder[IO](ExecutionContext.global).resource
 
-    OptionT(client.use(impl.children(_, bucket, dir, sign)))
+    OptionT(client.use(impl.children(_, bucket, dir)))
       .getOrElseF(IO.raiseError(new Exception("Could not list children under the root")))
       .flatMap(_.compile.toList).map { children =>
         children.length must_== 4
