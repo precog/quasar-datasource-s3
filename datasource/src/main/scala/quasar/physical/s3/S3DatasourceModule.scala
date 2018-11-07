@@ -89,11 +89,12 @@ object S3DatasourceModule extends LightweightDatasourceModule {
   ///
 
   private def mkClient[F[_]: ConcurrentEffect](conf: S3Config)
-    (implicit ec: ExecutionContext)
+      (implicit ec: ExecutionContext)
       : F[Disposable[F, Client[F]]] = {
-    val clientResource = BlazeClientBuilder[F](ec).resource
-    val signingClient = clientResource.map(AwsV4Signing(conf)(_))
 
-    s3.resourceToDisposable(signingClient)
+    val clientResource = BlazeClientBuilder[F](ec).resource
+    val signingClient = clientResource.map(AwsV4Signing(conf))
+
+    Disposable.fromResource(signingClient)
   }
 }

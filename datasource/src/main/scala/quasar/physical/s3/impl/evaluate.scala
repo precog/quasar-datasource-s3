@@ -18,6 +18,7 @@ package quasar.physical.s3
 package impl
 
 import slamdata.Predef._
+import quasar.Disposable
 import quasar.api.resource.ResourcePath
 import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.contrib.pathy._
@@ -54,7 +55,7 @@ object evaluate {
     f: Response[F] => Stream[F, A])
     (implicit MR: MonadResourceErr[F])
       : F[Stream[F, A]] =
-    s3.resourceToDisposable(client.run(req)).flatMap { disposable =>
+    Disposable.fromResource(client.run(req)) flatMap { disposable =>
       val response = disposable.unsafeValue
       val dispose = disposable.dispose
 
