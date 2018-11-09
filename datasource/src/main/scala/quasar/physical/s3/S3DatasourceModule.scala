@@ -30,6 +30,7 @@ import cats.effect.{ConcurrentEffect, ContextShift, Timer}
 import fs2.Stream
 import org.http4s.client.Client
 import org.http4s.client.blaze.BlazeClientBuilder
+import org.http4s.client.middleware.FollowRedirect
 import scalaz.{\/, NonEmptyList}
 import scalaz.syntax.either._
 import scalaz.syntax.functor._
@@ -91,10 +92,10 @@ object S3DatasourceModule extends LightweightDatasourceModule {
   private def mkClient[F[_]: ConcurrentEffect](conf: S3Config)
       (implicit ec: ExecutionContext)
       : F[Disposable[F, Client[F]]] = {
-
     val clientResource = BlazeClientBuilder[F](ec).resource
     val signingClient = clientResource.map(AwsV4Signing(conf))
+    val redirectClient = signingClient.map(FollowRedirect(3))
 
-    Disposable.fromResource(signingClient)
+    Disposable.fromResource(redirectClient)
   }
 }
