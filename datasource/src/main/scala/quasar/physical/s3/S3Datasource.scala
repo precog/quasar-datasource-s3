@@ -29,7 +29,7 @@ import slamdata.Predef.{Stream => _, _}
 import cats.data.OptionT
 import cats.effect.Effect
 import cats.syntax.applicative._
-import cats.syntax.apply._
+import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.option._
 import fs2.Stream
@@ -83,16 +83,15 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
     }
   }
 
-  def isLive(maxRedirects: Int): F[Liveness] = {
-    val listing = OptionT(prefixedChildPaths(ResourcePath.Root)).isDefined
-    val live = impl.preflightCheck(client, config, maxRedirects)
-
-    (listing, live).mapN {
-      case (true, None) => Liveness.live
-      case (false, Some(newConfig)) => Liveness.redirected(newConfig)
-      case _ => Liveness.notLive
+  def isLive(maxRedirects: Int): F[Liveness] =
+    impl.preflightCheck(client, config, maxRedirects) flatMap {
+      case Some(newConfig) =>
+        Liveness.redirected(newConfig).pure[F]
+      case None =>
+        OptionT(prefixedChildPaths(ResourcePath.Root)).isDefined.ifM(
+          Liveness.live.pure[F],
+          Liveness.notLive.pure[F])
     }
-  }
 
   //
 

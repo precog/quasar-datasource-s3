@@ -50,15 +50,18 @@ object S3DatasourceModule extends LightweightDatasourceModule {
       case Right(s3Config) =>
         mkClient(s3Config).flatMap { disposableClient =>
           val s3Ds = new S3Datasource[F](disposableClient.unsafeValue, s3Config)
+          // FollowRediret is not mounted in mkClient because it interferes
+          // with permanent redirect handling
+          val redirectClient = FollowRedirect(MaxRedirects)(disposableClient.unsafeValue)
 
           s3Ds.isLive(MaxRedirects) map {
             case Redirected(newConfig) =>
               val ds: Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]] =
-                new S3Datasource[F](disposableClient.unsafeValue, newConfig)
+                new S3Datasource[F](redirectClient, newConfig)
               Disposable(ds, disposableClient.dispose).right
             case Live =>
               val ds: Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]] =
-                new S3Datasource[F](disposableClient.unsafeValue, s3Config)
+                new S3Datasource[F](redirectClient, s3Config)
               Disposable(ds, disposableClient.dispose).right
             case NotLive =>
               val msg = "Unable to ListObjects at the root of the bucket"
@@ -96,8 +99,7 @@ object S3DatasourceModule extends LightweightDatasourceModule {
       : F[Disposable[F, Client[F]]] = {
     val clientResource = BlazeClientBuilder[F](ec).resource
     val signingClient = clientResource.map(AwsV4Signing(conf))
-    val redirectClient = signingClient.map(FollowRedirect(MaxRedirects))
 
-    Disposable.fromResource(redirectClient)
+    Disposable.fromResource(signingClient)
   }
 }
