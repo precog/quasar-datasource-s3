@@ -21,21 +21,46 @@ import quasar.physical.s3.S3Config
 import slamdata.Predef._
 
 import cats.Applicative
+import cats.data.OptionT
+import cats.effect.Sync
 import cats.syntax.applicative._
+import cats.syntax.flatMap._
 import cats.syntax.option._
+import fs2.Stream
+import org.http4s.Uri
 import org.http4s.client.Client
 import org.http4s.headers.Location
 import org.http4s.{Method, Request, Status}
 
 object preflightCheck {
-  def apply[F[_]: Applicative](client: Client[F], config: S3Config): F[Option[S3Config]] = {
-    client.fetch(Request[F](uri = config.bucket, method = Method.HEAD))(resp => resp.status match {
-      case Status.Ok => none.pure[F]
-      case Status.MovedPermanently => resp.headers.get(Location) match {
-        case Some(loc) => config.copy(bucket = loc.uri).some.pure[F]
-        case None => none.pure[F]
-      }
+  def apply[F[_]: Sync](client: Client[F], config: S3Config)
+      : F[Option[S3Config]] =
+    OptionT(followRedirects(client, config))
+      .map(newUri => config.copy(bucket = newUri))
+      .value
+
+  private def followRedirects[F[_]: Sync](client: Client[F], config: S3Config): F[Option[Uri]] =
+    redirectFor(client, config.bucket).flatMap {
+      case redirect @ Some((Status.MovedPermanently | Status.PermanentRedirect, _)) =>
+        Stream.iterateEval[F, Option[(Status, Uri)]](redirect) {
+          case Some((_, u)) => redirectFor(client, u)
+          case _ => none.pure[F]
+        }.take(4).filter {
+          case Some((Status.Ok, u)) => true
+          case _ => false
+        }.unNone.map(_._2).compile.last
       case _ => none.pure[F]
+    }
+
+  private def redirectFor[F[_]: Applicative](client: Client[F], u: Uri)
+      : F[Option[(Status, Uri)]] = {
+    client.fetch(Request[F](uri = u, method = Method.HEAD))(resp => resp.status match {
+      case status @ (Status.MovedPermanently | Status.PermanentRedirect) =>
+        resp.headers.get(Location).map(loc => (status, loc.uri)).pure[F]
+      case Status.Ok =>
+        (Status.Ok, u).some.pure[F]
+      case _ =>
+        none.pure[F]
     })
   }
 }
