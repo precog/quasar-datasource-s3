@@ -83,9 +83,9 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
     }
   }
 
-  def isLive: F[Liveness] = {
+  def isLive(maxRedirects: Int): F[Liveness] = {
     val listing = OptionT(prefixedChildPaths(ResourcePath.Root)).isDefined
-    val live = impl.preflightCheck(client, config)
+    val live = impl.preflightCheck(client, config, maxRedirects)
 
     (listing, live).mapN {
       case (true, None) => Liveness.live

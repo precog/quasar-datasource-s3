@@ -33,19 +33,21 @@ import org.http4s.headers.Location
 import org.http4s.{Method, Request, Status}
 
 object preflightCheck {
-  def apply[F[_]: Sync](client: Client[F], config: S3Config)
+  def apply[F[_]: Sync](client: Client[F], config: S3Config, maxRedirects: Int)
       : F[Option[S3Config]] =
-    OptionT(followRedirects(client, config))
+    OptionT(followRedirects(client, config, maxRedirects))
       .map(newUri => config.copy(bucket = newUri))
       .value
 
-  private def followRedirects[F[_]: Sync](client: Client[F], config: S3Config): F[Option[Uri]] =
+  private def followRedirects[F[_]: Sync](client: Client[F], config: S3Config, maxRedirects: Int)
+      : F[Option[Uri]] =
     redirectFor(client, config.bucket).flatMap {
       case redirect @ Some((Status.MovedPermanently | Status.PermanentRedirect, _)) =>
         Stream.iterateEval[F, Option[(Status, Uri)]](redirect) {
           case Some((_, u)) => redirectFor(client, u)
           case _ => none.pure[F]
-        }.take(4).filter {
+        // maxRedirects plus one for the last succesful request
+        }.take(maxRedirects.toLong + 1).filter {
           case Some((Status.Ok, u)) => true
           case _ => false
         }.unNone.map(_._2).compile.last

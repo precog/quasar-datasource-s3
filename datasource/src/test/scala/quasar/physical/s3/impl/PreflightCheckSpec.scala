@@ -32,6 +32,7 @@ import org.specs2.mutable.Specification
 final class PreflightCheckSpec extends Specification {
   implicit val cs = IO.contextShift(ExecutionContext.global)
 
+  val maxRedirects = 3
   val app = HttpRoutes.of[IO] {
     case Method.HEAD -> Root / "bucket0" =>
       SeeOther(Location(Uri.uri("http://localhost/bucket1")))
@@ -64,7 +65,7 @@ final class PreflightCheckSpec extends Specification {
     val uri = Uri.uri("http://localhost/bucket2")
     val redirectedTo = Uri.uri("http://localhost/bucket3")
 
-    impl.preflightCheck(client, config.copy(bucket = uri)).unsafeRunSync must beSome.like {
+    impl.preflightCheck(client, config.copy(bucket = uri), maxRedirects).unsafeRunSync must beSome.like {
       case S3Config(u, _, _) => u must_== redirectedTo
     }
   }
@@ -72,20 +73,20 @@ final class PreflightCheckSpec extends Specification {
   "bucket URI is not altered for non-permanent redirects" >> {
     val uri = Uri.uri("http://localhost/bucket0")
 
-    impl.preflightCheck(client, config.copy(bucket = uri)).unsafeRunSync must beNone
+    impl.preflightCheck(client, config.copy(bucket = uri), maxRedirects).unsafeRunSync must beNone
   }
 
   "bucket URI is not altered for non-redirects" >> {
     val uri = Uri.uri("http://localhost/bucket3")
 
-    impl.preflightCheck(client, config.copy(bucket = uri)).unsafeRunSync must beNone
+    impl.preflightCheck(client, config.copy(bucket = uri), maxRedirects).unsafeRunSync must beNone
   }
 
   "follows three permanent redirects" >> {
     val uri = Uri.uri("http://localhost/first")
     val finalUri = Uri.uri("http://localhost/fourth")
 
-    impl.preflightCheck(client, config.copy(bucket = uri)).unsafeRunSync must beSome.like {
+    impl.preflightCheck(client, config.copy(bucket = uri), maxRedirects).unsafeRunSync must beSome.like {
       case S3Config(u, _, _) => u must_== finalUri
     }
   }
@@ -93,6 +94,6 @@ final class PreflightCheckSpec extends Specification {
   "fails with more than three redirects" >> {
     val uri = Uri.uri("http://localhost/loop0")
 
-    impl.preflightCheck(client, config.copy(bucket = uri)).unsafeRunSync must beNone
+    impl.preflightCheck(client, config.copy(bucket = uri), maxRedirects).unsafeRunSync must beNone
   }
 }

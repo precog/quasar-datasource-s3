@@ -51,7 +51,7 @@ object S3DatasourceModule extends LightweightDatasourceModule {
         mkClient(s3Config).flatMap { disposableClient =>
           val s3Ds = new S3Datasource[F](disposableClient.unsafeValue, s3Config)
 
-          s3Ds.isLive map {
+          s3Ds.isLive(MaxRedirects) map {
             case Redirected(newConfig) =>
               val ds: Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]] =
                 new S3Datasource[F](disposableClient.unsafeValue, newConfig)
@@ -89,12 +89,14 @@ object S3DatasourceModule extends LightweightDatasourceModule {
 
   ///
 
+  private val MaxRedirects = 3
+
   private def mkClient[F[_]: ConcurrentEffect](conf: S3Config)
       (implicit ec: ExecutionContext)
       : F[Disposable[F, Client[F]]] = {
     val clientResource = BlazeClientBuilder[F](ec).resource
     val signingClient = clientResource.map(AwsV4Signing(conf))
-    val redirectClient = signingClient.map(FollowRedirect(3))
+    val redirectClient = signingClient.map(FollowRedirect(MaxRedirects))
 
     Disposable.fromResource(redirectClient)
   }
