@@ -87,12 +87,13 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
 
   def isLive(maxRedirects: Int): F[Liveness] =
     impl.preflightCheck(client, config.bucket, maxRedirects) flatMap {
-      case Some(newBucket) if newBucket === config.bucket =>
-        OptionT(children(client, newBucket, Path.rootDir))
-          .fold(Liveness.notLive)(_ => Liveness.live)
       case Some(newBucket) =>
         OptionT(children(client, newBucket, Path.rootDir))
-          .fold(Liveness.notLive)(_ => Liveness.live)
+          .fold(Liveness.notLive)(_ =>
+            if(newBucket === config.bucket)
+              Liveness.live
+            else
+              Liveness.redirected(config.copy(bucket = newBucket)))
       case None =>
         Liveness.notLive.pure[F]
     }
