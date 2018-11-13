@@ -79,10 +79,7 @@ object S3DatasourceModule extends LightweightDatasourceModule {
 
   def sanitizeConfig(config: Json): Json = {
     val redactedCreds =
-      S3Credentials(
-        AccessKey("<REDACTED>"),
-        SecretKey("<REDACTED>"),
-        Region("<REDACTED>"))
+      S3Credentials(AccessKey(Redacted), SecretKey(Redacted), Region(Redacted))
 
     config.as[S3Config].result.toOption.map((c: S3Config) =>
       // ignore the existing credentials and replace them with redactedCreds
@@ -93,6 +90,7 @@ object S3DatasourceModule extends LightweightDatasourceModule {
   ///
 
   private val MaxRedirects = 3
+  private val Redacted = "<REDACTED>"
 
   private def mkClient[F[_]: ConcurrentEffect](conf: S3Config)
       (implicit ec: ExecutionContext)
