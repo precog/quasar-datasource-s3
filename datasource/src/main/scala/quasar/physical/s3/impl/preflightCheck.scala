@@ -16,12 +16,9 @@
 
 package quasar.physical.s3.impl
 
-import quasar.physical.s3.S3Config
-
 import slamdata.Predef._
 
 import cats.Applicative
-import cats.data.OptionT
 import cats.effect.Sync
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
@@ -30,25 +27,22 @@ import fs2.Stream
 import org.http4s.Uri
 import org.http4s.client.Client
 import org.http4s.headers.Location
+import org.http4s.Status.{Found, MovedPermanently, Ok, PermanentRedirect, SeeOther, TemporaryRedirect}
 import org.http4s.{Method, Request, Status}
 
 object preflightCheck {
-  def apply[F[_]: Sync](client: Client[F], config: S3Config, maxRedirects: Int)
-      : F[Option[S3Config]] =
-    OptionT(followRedirects(client, config, maxRedirects))
-      .map(newUri => config.copy(bucket = newUri))
-      .value
-
-  private def followRedirects[F[_]: Sync](client: Client[F], config: S3Config, maxRedirects: Int)
+  def apply[F[_]: Sync](client: Client[F], bucket: Uri, maxRedirects: Int)
       : F[Option[Uri]] =
-    redirectFor(client, config.bucket).flatMap {
-      case redirect @ Some((Status.MovedPermanently | Status.PermanentRedirect, _)) =>
+    redirectFor(client, bucket).flatMap {
+      case Some((TemporaryRedirect | Found | SeeOther | Ok, _)) =>
+        bucket.some.pure[F]
+      case redirect @ Some((MovedPermanently | PermanentRedirect, _)) =>
         Stream.iterateEval[F, Option[(Status, Uri)]](redirect) {
           case Some((_, u)) => redirectFor(client, u)
           case _ => none.pure[F]
         // maxRedirects plus one for the last succesful request
         }.take(maxRedirects.toLong + 1).filter {
-          case Some((Status.Ok, u)) => true
+          case Some((Ok, u)) => true
           case _ => false
         }.unNone.map(_._2).compile.last
       case _ => none.pure[F]
@@ -57,10 +51,12 @@ object preflightCheck {
   private def redirectFor[F[_]: Applicative](client: Client[F], u: Uri)
       : F[Option[(Status, Uri)]] = {
     client.fetch(Request[F](uri = u, method = Method.HEAD))(resp => resp.status match {
-      case status @ (Status.MovedPermanently | Status.PermanentRedirect) =>
+      case status @ (MovedPermanently | PermanentRedirect) =>
         resp.headers.get(Location).map(loc => (status, loc.uri)).pure[F]
-      case Status.Ok =>
-        (Status.Ok, u).some.pure[F]
+      case status @ (TemporaryRedirect | Found | SeeOther) =>
+        (status, u).some.pure[F]
+      case Ok =>
+        (Ok, u).some.pure[F]
       case _ =>
         none.pure[F]
     })

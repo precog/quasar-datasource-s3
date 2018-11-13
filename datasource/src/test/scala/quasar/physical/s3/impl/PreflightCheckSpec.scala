@@ -65,35 +65,31 @@ final class PreflightCheckSpec extends Specification {
     val uri = Uri.uri("http://localhost/bucket2")
     val redirectedTo = Uri.uri("http://localhost/bucket3")
 
-    impl.preflightCheck(client, config.copy(bucket = uri), maxRedirects).unsafeRunSync must beSome.like {
-      case S3Config(u, _, _) => u must_== redirectedTo
-    }
+    impl.preflightCheck(client, uri, maxRedirects).unsafeRunSync must beSome(redirectedTo)
   }
 
   "bucket URI is not altered for non-permanent redirects" >> {
     val uri = Uri.uri("http://localhost/bucket0")
 
-    impl.preflightCheck(client, config.copy(bucket = uri), maxRedirects).unsafeRunSync must beNone
+    impl.preflightCheck(client, uri, maxRedirects).unsafeRunSync must beSome(uri)
   }
 
   "bucket URI is not altered for non-redirects" >> {
     val uri = Uri.uri("http://localhost/bucket3")
 
-    impl.preflightCheck(client, config.copy(bucket = uri), maxRedirects).unsafeRunSync must beNone
+    impl.preflightCheck(client, uri, maxRedirects).unsafeRunSync must beSome(uri)
   }
 
   "follows three permanent redirects" >> {
     val uri = Uri.uri("http://localhost/first")
     val finalUri = Uri.uri("http://localhost/fourth")
 
-    impl.preflightCheck(client, config.copy(bucket = uri), maxRedirects).unsafeRunSync must beSome.like {
-      case S3Config(u, _, _) => u must_== finalUri
-    }
+    impl.preflightCheck(client, uri, maxRedirects).unsafeRunSync must beSome(finalUri)
   }
 
   "fails with more than three redirects" >> {
     val uri = Uri.uri("http://localhost/loop0")
 
-    impl.preflightCheck(client, config.copy(bucket = uri), maxRedirects).unsafeRunSync must beNone
+    impl.preflightCheck(client, uri, maxRedirects).unsafeRunSync must beNone
   }
 }
