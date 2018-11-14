@@ -30,6 +30,7 @@ import cats.effect.{ConcurrentEffect, ContextShift, Timer}
 import fs2.Stream
 import org.http4s.client.Client
 import org.http4s.client.blaze.BlazeClientBuilder
+import org.http4s.client.middleware.FollowRedirect
 import scalaz.{\/, NonEmptyList}
 import scalaz.syntax.either._
 import scalaz.syntax.functor._
@@ -49,15 +50,18 @@ object S3DatasourceModule extends LightweightDatasourceModule {
       case Right(s3Config) =>
         mkClient(s3Config).flatMap { disposableClient =>
           val s3Ds = new S3Datasource[F](disposableClient.unsafeValue, s3Config)
+          // FollowRediret is not mounted in mkClient because it interferes
+          // with permanent redirect handling
+          val redirectClient = FollowRedirect(MaxRedirects)(disposableClient.unsafeValue)
 
-          s3Ds.isLive map {
+          s3Ds.isLive(MaxRedirects) map {
             case Redirected(newConfig) =>
               val ds: Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]] =
-                new S3Datasource[F](disposableClient.unsafeValue, newConfig)
+                new S3Datasource[F](redirectClient, newConfig)
               Disposable(ds, disposableClient.dispose).right
             case Live =>
               val ds: Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]] =
-                new S3Datasource[F](disposableClient.unsafeValue, s3Config)
+                new S3Datasource[F](redirectClient, s3Config)
               Disposable(ds, disposableClient.dispose).right
             case NotLive =>
               val msg = "Unable to ListObjects at the root of the bucket"
@@ -75,10 +79,7 @@ object S3DatasourceModule extends LightweightDatasourceModule {
 
   def sanitizeConfig(config: Json): Json = {
     val redactedCreds =
-      S3Credentials(
-        AccessKey("<REDACTED>"),
-        SecretKey("<REDACTED>"),
-        Region("<REDACTED>"))
+      S3Credentials(AccessKey(Redacted), SecretKey(Redacted), Region(Redacted))
 
     config.as[S3Config].result.toOption.map((c: S3Config) =>
       // ignore the existing credentials and replace them with redactedCreds
@@ -88,10 +89,12 @@ object S3DatasourceModule extends LightweightDatasourceModule {
 
   ///
 
+  private val MaxRedirects = 3
+  private val Redacted = "<REDACTED>"
+
   private def mkClient[F[_]: ConcurrentEffect](conf: S3Config)
       (implicit ec: ExecutionContext)
       : F[Disposable[F, Client[F]]] = {
-
     val clientResource = BlazeClientBuilder[F](ec).resource
     val signingClient = clientResource.map(AwsV4Signing(conf))
 

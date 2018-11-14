@@ -29,10 +29,12 @@ import slamdata.Predef.{Stream => _, _}
 import cats.data.OptionT
 import cats.effect.Effect
 import cats.syntax.applicative._
-import cats.syntax.apply._
+import cats.syntax.eq._
+import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.option._
 import fs2.Stream
+import org.http4s.Uri
 import org.http4s.client.Client
 import pathy.Path
 import pathy.Path.{DirName, FileName}
@@ -65,7 +67,7 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
     }
 
   def prefixedChildPaths(path: ResourcePath): F[Option[Stream[F, (ResourceName, ResourcePathType)]]] =
-    impl.children(client, config.bucket, dropEmpty(path.toPath)) map {
+    children(client, config.bucket, dropEmpty(path.toPath)) map {
       case None =>
         none[Stream[F, (ResourceName, ResourcePathType)]]
       case Some(paths) =>
@@ -83,18 +85,23 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
     }
   }
 
-  def isLive: F[Liveness] = {
-    val listing = OptionT(prefixedChildPaths(ResourcePath.Root)).isDefined
-    val live = impl.preflightCheck(client, config)
-
-    (listing, live).mapN {
-      case (true, None) => Liveness.live
-      case (false, Some(newConfig)) => Liveness.redirected(newConfig)
-      case _ => Liveness.notLive
+  def isLive(maxRedirects: Int): F[Liveness] =
+    impl.preflightCheck(client, config.bucket, maxRedirects) flatMap {
+      case Some(newBucket) =>
+        OptionT(children(client, newBucket, Path.rootDir))
+          .fold(Liveness.notLive)(_ =>
+            if(newBucket === config.bucket)
+              Liveness.live
+            else
+              Liveness.redirected(config.copy(bucket = newBucket)))
+      case None =>
+        Liveness.notLive.pure[F]
     }
-  }
 
-  //
+  ///
+
+  private def children(client: Client[F], uri: Uri, path: APath) =
+    impl.children(client, uri, path)
 
   private def dropEmpty(path: APath): APath =
     Path.peel(path) match {
