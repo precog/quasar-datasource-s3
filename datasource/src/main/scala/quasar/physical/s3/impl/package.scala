@@ -46,7 +46,7 @@ package object impl {
 
   // S3 specific encoding, see
   // https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html
-  def s3Encode(s: String, encodeSlash: Boolean) = {
+  def s3Encode(s: String, encodeSlash: Boolean): String = {
     val e = URLEncoder.encode(s, StandardCharsets.UTF_8.toString)
       .replaceAll("\\+", "%20")
     // URLEncoder already encodes / to %2F

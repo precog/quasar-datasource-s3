@@ -44,7 +44,7 @@ import org.http4s.{Header, Headers, Method, Request, Response, Uri}
 object RequestSigning {
   private val hashAlg = "SHA-256"
 
-  private def sha256[F[_]: Sync](payload: Stream[F, Byte]): F[Array[Byte]] =
+  private def sha256Stream[F[_]: Sync](payload: Stream[F, Byte]): F[Array[Byte]] =
     payload.chunks.compile.fold(MessageDigest.getInstance(hashAlg))((md, chunk) => { md.update(chunk.toArray); md }).map(_.digest)
 
   private def sha256(payload: Array[Byte]): Array[Byte] = {
@@ -109,9 +109,9 @@ final case class RequestSigning(
   import RequestSigning._
 
   def signedHeaders[F[_]: Sync](req: Request[F]): F[Headers] =
-    signedHeaders(req.uri.path, req.method, req.params, req.headers, req.body)
+    signHeaders(req.uri.path, req.method, req.params, req.headers, req.body)
 
-  def signedHeaders[F[_]: Sync](path: Uri.Path, method: Method, queryParams: Map[String, String], headers: Headers, payload: Stream[F, Byte]): F[Headers] = {
+  def signHeaders[F[_]: Sync](path: Uri.Path, method: Method, queryParams: Map[String, String], headers: Headers, payload: Stream[F, Byte]): F[Headers] = {
 
     val now: LocalDateTime = clock
     val credentialsNow = credentials
@@ -120,7 +120,7 @@ final case class RequestSigning(
       Headers(credentialsNow.sessionToken.toList map xAmzSecurityTokenHeader)
 
     val extraDateHeaders: Headers =
-      if (!headers.iterator.exists(_.name == Date.name)) Headers(xAmzDateHeader(now)) else Headers()
+      if (!headers.iterator.exists(_.name === Date.name)) Headers(xAmzDateHeader(now)) else Headers()
 
     val signedHeaders = headers ++ extraDateHeaders ++ extraSecurityHeaders
 
@@ -129,7 +129,7 @@ final case class RequestSigning(
     val sha256Payload: F[String] =
       payloadSigning match {
         case PayloadSigning.Unsigned => "UNSIGNED-PAYLOAD".pure[F]
-        case PayloadSigning.Signed   => sha256(payload) map base16
+        case PayloadSigning.Signed   => sha256Stream(payload) map base16
       }
 
     sha256Payload map { payloadHash =>

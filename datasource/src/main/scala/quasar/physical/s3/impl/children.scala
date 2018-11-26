@@ -181,7 +181,7 @@ object children {
     // entire bucket. Otherwise, we have to drop
     // the first `/`, because object prefixes can't
     // begin with `/`.
-    if (apath != Path.rootDir) {
+    if (apath =!= Path.rootDir) {
       Path.posixCodec.printPath(apath).drop(1).self.some // .replace("/", "%2F")
     }
     else {
