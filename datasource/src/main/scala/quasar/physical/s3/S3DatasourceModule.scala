@@ -43,6 +43,7 @@ import slamdata.Predef.{Stream => _, _}
 object S3DatasourceModule extends LightweightDatasourceModule {
   def kind: DatasourceType = s3.datasourceKind
 
+  @SuppressWarnings(Array("org.wartremover.warts.ImplicitParameter"))
   def lightweightDatasource[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
     config: Json)(implicit ec: ExecutionContext)
       : F[InitializationError[Json] \/ Disposable[F, Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]]]] =
@@ -92,6 +93,7 @@ object S3DatasourceModule extends LightweightDatasourceModule {
   private val MaxRedirects = 3
   private val Redacted = "<REDACTED>"
 
+  @SuppressWarnings(Array("org.wartremover.warts.ImplicitParameter"))
   private def mkClient[F[_]: ConcurrentEffect](conf: S3Config)
       (implicit ec: ExecutionContext)
       : F[Disposable[F, Client[F]]] = {
