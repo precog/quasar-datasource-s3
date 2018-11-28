@@ -44,6 +44,9 @@ jobs:
     - set -e
     - $SBT transferPublishAndTagResources
     - TRAVIS_JOB_NUMBER=1 scripts/publishAndTag 'slamdata/quasar-datasource-s3'
+    - bumpInDownstream() { echo $1 > slamdata-s3-version; }
+    - export -f bumpInDownstream
+    - scripts/bumpDependentProject slamdata slamx bumpInDownstream
 
     git:
       depth: false
