@@ -51,7 +51,7 @@ class S3DatasourceModuleSpec extends Specification {
 
   "rejects a non-bucket URI" >> {
     val conf = Json.obj(
-      "bucket" -> Json.jString("https://example.com"),
+      "bucket" -> Json.jString("https://google.com"),
       "jsonParsing" -> Json.jString("array"))
 
     val ds = S3DatasourceModule.lightweightDatasource[IO](conf).unsafeRunSync.toEither
