@@ -51,11 +51,6 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
   val spanishResource = spanishResourcePrefix / spanishResourceLeaf
 
   "pathIsResource" >> {
-    "the root of a bucket with a trailing slash is not a resource" >>* {
-      val root = ResourcePath.root() / ResourceName("")
-      datasource.pathIsResource(root).map(_ must beFalse)
-    }
-
     "the root of a bucket is not a resource" >>* {
       val root = ResourcePath.root()
       datasource.pathIsResource(root).map(_ must beFalse)
