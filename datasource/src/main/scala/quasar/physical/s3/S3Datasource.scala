@@ -21,7 +21,6 @@ import quasar.api.resource.ResourcePath.{Leaf, Root}
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.connector.{MonadResourceErr, ParsableType, QueryResult, ResourceError}
 import quasar.connector.datasource.LightweightDatasource
-import quasar.contrib.pathy.APath
 import quasar.contrib.scalaz.MonadError_
 
 import slamdata.Predef.{Stream => _, _}
@@ -34,10 +33,8 @@ import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.option._
 import fs2.Stream
-import org.http4s.Uri
 import org.http4s.client.Client
 import pathy.Path
-import pathy.Path.{DirName, FileName}
 import scalaz.{\/-, -\/}
 import shims._
 
