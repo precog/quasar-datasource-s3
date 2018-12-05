@@ -21,7 +21,6 @@ import quasar.api.resource.ResourcePath.{Leaf, Root}
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.connector.{MonadResourceErr, ParsableType, QueryResult, ResourceError}
 import quasar.connector.datasource.LightweightDatasource
-import quasar.contrib.pathy.APath
 import quasar.contrib.scalaz.MonadError_
 
 import slamdata.Predef.{Stream => _, _}
@@ -34,10 +33,8 @@ import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.option._
 import fs2.Stream
-import org.http4s.Uri
 import org.http4s.client.Client
 import pathy.Path
-import pathy.Path.{DirName, FileName}
 import scalaz.{\/-, -\/}
 import shims._
 
@@ -67,7 +64,7 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
     }
 
   def prefixedChildPaths(path: ResourcePath): F[Option[Stream[F, (ResourceName, ResourcePathType)]]] =
-    children(client, config.bucket, dropEmpty(path.toPath)) map {
+    impl.children(client, config.bucket, path.toPath) map {
       case None =>
         none[Stream[F, (ResourceName, ResourcePathType)]]
       case Some(paths) =>
@@ -79,7 +76,7 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
 
   def pathIsResource(path: ResourcePath): F[Boolean] = path match {
     case Root => false.pure[F]
-    case Leaf(file) => Path.refineType(dropEmpty(file)) match {
+    case Leaf(file) => Path.refineType(file) match {
       case -\/(_) => false.pure[F]
       case \/-(f) => impl.isResource(client, config.bucket, f)
     }
@@ -88,7 +85,7 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
   def isLive(maxRedirects: Int): F[Liveness] =
     impl.preflightCheck(client, config.bucket, maxRedirects) flatMap {
       case Some(newBucket) =>
-        OptionT(children(client, newBucket, Path.rootDir))
+        OptionT(impl.children(client, newBucket, Path.rootDir))
           .fold(Liveness.notLive)(_ =>
             if(newBucket === config.bucket)
               Liveness.live
@@ -96,18 +93,6 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
               Liveness.redirected(config.copy(bucket = newBucket)))
       case None =>
         Liveness.notLive.pure[F]
-    }
-
-  ///
-
-  private def children(client: Client[F], uri: Uri, path: APath) =
-    impl.children(client, uri, path)
-
-  private def dropEmpty(path: APath): APath =
-    Path.peel(path) match {
-      case Some((d, \/-(FileName(fn)))) if fn.isEmpty => d
-      case Some((d, -\/(DirName(dn)))) if dn.isEmpty => d
-      case _ => path
     }
 }
 
