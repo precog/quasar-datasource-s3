@@ -23,6 +23,7 @@ import quasar.api.resource.ResourcePath
 import quasar.connector.{Datasource, LightweightDatasourceModule, MonadResourceErr, QueryResult}
 import quasar.physical.s3.S3Datasource.{Live, NotLive, Redirected}
 
+import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext
 
 import argonaut.{EncodeJson, Json}
@@ -31,7 +32,7 @@ import fs2.Stream
 import org.http4s.client.Client
 import org.http4s.client.blaze.BlazeClientBuilder
 import org.http4s.client.middleware.FollowRedirect
-import scalaz.{\/, NonEmptyList}
+import scalaz.{NonEmptyList, \/}
 import scalaz.syntax.either._
 import scalaz.syntax.functor._
 import cats.syntax.applicative._
@@ -97,7 +98,9 @@ object S3DatasourceModule extends LightweightDatasourceModule {
   private def mkClient[F[_]: ConcurrentEffect](conf: S3Config)
       (implicit ec: ExecutionContext)
       : F[Disposable[F, Client[F]]] = {
-    val clientResource = BlazeClientBuilder[F](ec).resource
+    val clientResource = BlazeClientBuilder[F](ec)
+      .withIdleTimeout(Duration.Inf)
+      .resource
     val signingClient = clientResource.map(AwsV4Signing(conf))
 
     Disposable.fromResource(signingClient)
