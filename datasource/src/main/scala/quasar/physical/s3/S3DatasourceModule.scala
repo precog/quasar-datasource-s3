@@ -27,7 +27,7 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext
 
 import argonaut.{EncodeJson, Json}
-import cats.effect.{Bracket, ConcurrentEffect, ContextShift, Timer}
+import cats.effect.{ConcurrentEffect, ContextShift, Timer}
 import cats.instances.tuple._
 import cats.syntax.applicative._
 import cats.syntax.bifunctor._
@@ -97,7 +97,7 @@ object S3DatasourceModule extends LightweightDatasourceModule {
   private val Redacted = "<REDACTED>"
 
   @SuppressWarnings(Array("org.wartremover.warts.ImplicitParameter"))
-  private def mkClient[F[_]: Bracket[?[_], Throwable]: ConcurrentEffect](conf: S3Config)
+  private def mkClient[F[_]: ConcurrentEffect](conf: S3Config)
       (implicit ec: ExecutionContext)
       : F[Disposable[F, Client[F]]] = {
     val clientResource = BlazeClientBuilder[F](ec)
