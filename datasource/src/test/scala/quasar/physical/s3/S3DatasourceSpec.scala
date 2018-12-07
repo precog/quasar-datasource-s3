@@ -18,7 +18,6 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 
-import quasar.Disposable
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.common.data.Data
 import quasar.connector.{Datasource, DatasourceSpec, MonadResourceErr, QueryResult, ResourceError}
@@ -29,7 +28,7 @@ import java.nio.charset.Charset
 import scala.concurrent.ExecutionContext
 
 import cats.data.{EitherT, OptionT}
-import cats.effect.{ConcurrentEffect, Effect, IO, Resource}
+import cats.effect.{ConcurrentEffect, IO}
 import cats.syntax.applicative._
 import cats.syntax.functor._
 import fs2.Stream
@@ -204,8 +203,10 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
 
     val testConfig = S3Config(bucket, parsing, creds)
     val ec = ExecutionContext.Implicits.global
-    val builder = BlazeClientBuilder[F](ec)
-    val client = unsafeResource(builder.resource)
+    val builder = BlazeClientBuilder[F](ec).allocate
+    // FIXME: eliminate inheritance from DatasourceSpec and sequence the resource instead of
+    // ignoring clean up here.
+    val client = builder.map(_._1)
     val signingClient = client.map(AwsV4Signing(testConfig))
 
     signingClient map (new S3Datasource[F](_, S3Config(bucket, parsing, creds)))
@@ -213,11 +214,6 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
 
   val datasourceLD = run(mkDatasource[IO](S3JsonParsing.LineDelimited, testBucket, None))
   val datasource = run(mkDatasource[IO](S3JsonParsing.JsonArray, testBucket, None))
-
-  // FIXME: eliminate inheritance from DatasourceSpec and sequence the resource instead of
-  // ignoring clean up here.
-  private def unsafeResource[F[_]: Effect, A](r: Resource[F, A]): F[A] =
-    Disposable.fromResource(r).map(_.unsafeValue)
 }
 
 object S3DatasourceSpec {
