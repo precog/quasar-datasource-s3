@@ -27,6 +27,7 @@ import org.http4s.Uri
 import org.http4s.client.Client
 import org.http4s.dsl.io._
 import org.http4s.headers.Location
+import org.http4s.syntax.kleisli._
 import org.specs2.mutable.Specification
 
 final class PreflightCheckSpec extends Specification {

@@ -28,16 +28,18 @@ import scala.concurrent.ExecutionContext
 
 import argonaut.{EncodeJson, Json}
 import cats.effect.{ConcurrentEffect, ContextShift, Timer}
+import cats.instances.tuple._
+import cats.syntax.applicative._
+import cats.syntax.bifunctor._
+import cats.syntax.flatMap._
+import cats.syntax.option._
 import fs2.Stream
 import org.http4s.client.Client
 import org.http4s.client.blaze.BlazeClientBuilder
 import org.http4s.client.middleware.FollowRedirect
-import scalaz.{NonEmptyList, \/}
 import scalaz.syntax.either._
 import scalaz.syntax.functor._
-import cats.syntax.applicative._
-import cats.syntax.flatMap._
-import cats.syntax.option._
+import scalaz.{NonEmptyList, \/}
 import shims._
 import slamdata.Predef.{Stream => _, _}
 
@@ -100,9 +102,12 @@ object S3DatasourceModule extends LightweightDatasourceModule {
       : F[Disposable[F, Client[F]]] = {
     val clientResource = BlazeClientBuilder[F](ec)
       .withIdleTimeout(Duration.Inf)
-      .resource
-    val signingClient = clientResource.map(AwsV4Signing(conf))
+      .allocate
 
-    Disposable.fromResource(signingClient)
+    val signingClient = clientResource.map(_.leftMap(AwsV4Signing(conf)))
+
+    signingClient map {
+      case (sc, cleanup) => Disposable(sc, cleanup)
+    }
   }
 }
