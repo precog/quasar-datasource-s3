@@ -59,7 +59,7 @@ final class PreflightCheckSpec extends Specification {
   }.orNotFound
 
   val client = Client.fromHttpApp(app)
-  val config = S3Config(Uri.uri("http://localhost/bucket1"), S3JsonParsing.LineDelimited, None)
+  val config = S3Config(Uri.uri("http://localhost/bucket1"), S3JsonParsing.LineDelimited, None, None)
 
   "updates bucket URI for permanent redirects" >> {
     val uri = Uri.uri("http://localhost/bucket2")

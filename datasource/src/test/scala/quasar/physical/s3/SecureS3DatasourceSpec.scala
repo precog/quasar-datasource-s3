@@ -64,9 +64,9 @@ final class SecureS3DatasourceSpec extends S3DatasourceSpec {
   private val credsFile = "testCredentials.json"
 
   override val datasourceLD =
-    run(credentials >>= (creds => mkDatasource[IO](S3JsonParsing.LineDelimited, testBucket, creds)))
+    run(credentials >>= (creds => mkDatasource[IO](S3Config(testBucket, S3JsonParsing.LineDelimited, None, creds))))
   override val datasource =
-    run(credentials >>= (creds => mkDatasource[IO](S3JsonParsing.JsonArray, testBucket, creds)))
+    run(credentials >>= (creds => mkDatasource[IO](S3Config(testBucket, S3JsonParsing.JsonArray, None, creds))))
 }
 
 object SecureS3DatasourceSpec {
