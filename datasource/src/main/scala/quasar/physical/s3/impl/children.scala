@@ -96,10 +96,10 @@ object children {
       .map(_.leftMap(Stream.emits(_)))
 
   private def toPathSegment[F[_]](s: Stream[F, APath], dir: APath): Stream[F, PathSegment] =
-    s.filter(Path.parentDir(_) === pathToDir(dir))
-      .filter(_ =!= dir)
-      .flatMap(p => Stream.emits(Path.peel(p).toList))
-      .map(_._2)
+    s.filter(_ =!= dir)
+     .filter(Path.parentDir(_) === pathToDir(dir))
+     .flatMap(p => Stream.emits(Path.peel(p).toList))
+     .map(_._2)
 
   private def listObjects[F[_]: Effect](
     client: Client[F],
@@ -131,10 +131,10 @@ object children {
     val listingQuery = (bucket / "")
 
     val listType = ("list-type", "2").some
-    val delimiter = ("delimiter", "%2F").some
     // Converts a pathy Path to an S3 object prefix.
     val objectPrefix = aPathToObjectPrefix(dir)
-    val prefix = objectPrefix.map(("prefix", _))
+    val prefix = objectPrefix.map(("prefix", _)).getOrElse(("prefix", "")).some
+    val delimiter = objectPrefix.fold(("delimiter", "/").some)(_ => none)
 
     val ct0 = ct.map(_.value).map(("continuation-token", _))
 
@@ -144,12 +144,13 @@ object children {
     Request[F](uri = listingQuery.copy(query = q))
   }
 
-  // Lists all objects and prefixes from a ListObjects request. This needs to be filtered
+  // Lists all objects and prefixes from a ListObjects request.
   private def extractList(doc: Elem): Either[S3Error, (List[APath], Option[ContinuationToken])] = {
     val noContentMsg = S3Error.UnexpectedResponse("XML received from AWS API has no top-level <Contents>")
     val noKeyCountMsg = S3Error.UnexpectedResponse("XML received from AWS API has no top-level <KeyCount>")
     val noKeyMsg = S3Error.UnexpectedResponse("XML received from AWS API has no <Key> elements under <Contents>")
-    val noParseObjectMsg = S3Error.UnexpectedResponse("Failed to parse object path in S3 API response")
+    val noParseObjectMsg = S3Error.UnexpectedResponse("Failed to parse objects path in S3 API response")
+    val noParsePrefixesMsg = S3Error.UnexpectedResponse("Failed to parse prefixes in S3 API response")
 
     val contents =
       Either.catchNonFatal(doc \ "Contents").leftMap(_ => noContentMsg)
@@ -165,15 +166,33 @@ object children {
         .map(_.toList)
         .flatMap(_.traverse[Either[S3Error, ?], String](elem =>
           Either.catchNonFatal((elem \ "Key").text).leftMap(_ => noKeyMsg)))
-
     val childPaths =
       children
         .flatMap(_.traverse[Either[S3Error, ?], APath](pth =>
           Either.fromOption(s3NameToPath(pth), noParseObjectMsg)))
 
+    val commonPrefixes = Either.catchNonFatal(doc \ "CommonPrefixes").leftMap(_ => noParsePrefixesMsg)
+    val prefixes: Either[S3Error, List[String]] =
+      commonPrefixes
+        .map(_.toList)
+        .flatMap(_.traverse[Either[S3Error, ?], String](elem =>
+          Either.catchNonFatal((elem \ "Prefix").text).leftMap(_ => noParsePrefixesMsg)))
+    val prefixesPaths =
+      prefixes
+        .flatMap(_.traverse[Either[S3Error, ?], APath](pth =>
+          Either.fromOption(s3NameToPath(pth), noParsePrefixesMsg)))
+
+    val allPaths = (childPaths, prefixesPaths) match {
+      case (Left(errL), Left(errR)) =>
+        S3Error.UnexpectedResponse("No prefixes or objects in response").asLeft
+      case (Right(listing), Left(_)) => listing.asRight
+      case (Left(_), Right(listing)) => listing.asRight
+      case (Right(listingL), Right(listingR)) => (listingL ++ listingR).asRight
+    }
+
     keyCount.flatMap(kc =>
       if (kc === 0) S3Error.NotFound.asLeft
-      else childPaths.map((_, continuationToken)))
+      else allPaths.map((_, continuationToken)))
   }
 
   private def aPathToObjectPrefix(apath: APath): Option[String] = {
