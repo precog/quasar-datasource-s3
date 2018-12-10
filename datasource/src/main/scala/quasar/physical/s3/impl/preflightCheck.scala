@@ -49,8 +49,8 @@ object preflightCheck {
     }
 
   private def redirectFor[F[_]: Applicative](client: Client[F], u: Uri)
-      : F[Option[(Status, Uri)]] = {
-    client.fetch(Request[F](uri = u, method = Method.HEAD))(resp => resp.status match {
+      : F[Option[(Status, Uri)]] =
+    client.fetch(Request[F](uri = appendPathS3Encoded(u, ""), method = Method.HEAD))(resp => resp.status match {
       case status @ (MovedPermanently | PermanentRedirect) =>
         resp.headers.get(Location).map(loc => (status, loc.uri)).pure[F]
       case status @ (TemporaryRedirect | Found | SeeOther) =>
@@ -60,5 +60,4 @@ object preflightCheck {
       case _ =>
         none.pure[F]
     })
-  }
 }
