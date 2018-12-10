@@ -30,7 +30,9 @@ import scala.concurrent.ExecutionContext
 import argonaut.Json
 import argonaut.ArgonautScalaz._
 import cats.effect.{ConcurrentEffect, ContextShift, Timer}
+import cats.instances.tuple._
 import cats.syntax.applicative._
+import cats.syntax.bifunctor._
 import cats.syntax.eq._
 import cats.syntax.flatMap._
 import fs2.Stream
@@ -102,9 +104,12 @@ object S3DatasourceModule extends LightweightDatasourceModule {
       : F[Disposable[F, Client[F]]] = {
     val clientResource = BlazeClientBuilder[F](ec)
       .withIdleTimeout(Duration.Inf)
-      .resource
-    val signingClient = clientResource.map(AwsV4Signing(conf))
+      .allocate
 
-    Disposable.fromResource(signingClient)
+    val signingClient = clientResource.map(_.leftMap(AwsV4Signing(conf)))
+
+    signingClient map {
+      case (sc, cleanup) => Disposable(sc, cleanup)
+    }
   }
 }

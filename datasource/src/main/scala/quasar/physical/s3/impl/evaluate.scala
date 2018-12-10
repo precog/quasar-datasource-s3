@@ -18,7 +18,6 @@ package quasar.physical.s3
 package impl
 
 import slamdata.Predef._
-import quasar.Disposable
 import quasar.api.resource.ResourcePath
 import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.contrib.pathy._
@@ -29,7 +28,7 @@ import cats.syntax.flatMap._
 
 import fs2.Stream
 import org.http4s.client._
-import org.http4s.{Request, Response, Status, Uri}
+import org.http4s.{Request, Status, Uri}
 import pathy.Path
 import shims._
 
@@ -45,24 +44,18 @@ object evaluate {
     val queryUri = appendPathS3Encoded(uri, objectPath)
     val request = Request[F](uri = queryUri)
 
-    streamRequest[F, Byte](client, request, file)(_.body)
+    streamRequest[F](client, request, file)
   }
 
   ////
 
-  private def streamRequest[F[_]: Sync: MonadResourceErr, A](
-    client: Client[F], req: Request[F], file: AFile)(
-    f: Response[F] => Stream[F, A])
+  private def streamRequest[F[_]: Sync: MonadResourceErr](
+    client: Client[F], req: Request[F], file: AFile)
     (implicit MR: MonadResourceErr[F])
-      : F[Stream[F, A]] =
-    Disposable.fromResource(client.run(req)) flatMap { disposable =>
-      val response = disposable.unsafeValue
-      val dispose = disposable.dispose
-
-      response.status match {
-        case Status.NotFound => MR.raiseError(ResourceError.pathNotFound(ResourcePath.Leaf(file)))
-        case Status.Ok => f(response).onFinalize(dispose).pure[F]
-        case s => Sync[F].raiseError(new Exception(s"Unexpected status $s"))
-      }
+      : F[Stream[F, Byte]] =
+    client.status(req) flatMap {
+      case Status.NotFound => MR.raiseError(ResourceError.pathNotFound(ResourcePath.Leaf(file)))
+      case Status.Ok => client.stream(req).flatMap(_.body).pure[F]
+      case s => Sync[F].raiseError(new Exception(s"Unexpected status $s"))
     }
 }

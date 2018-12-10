@@ -17,7 +17,7 @@
 package quasar.physical.s3
 
 import slamdata.Predef._
-import quasar.Disposable
+
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.common.data.Data
 import quasar.connector._
@@ -27,7 +27,7 @@ import java.nio.charset.Charset
 import scala.concurrent.ExecutionContext
 
 import cats.data.{EitherT, OptionT}
-import cats.effect.{ConcurrentEffect, Effect, IO, Resource}
+import cats.effect.{ConcurrentEffect, IO}
 import cats.syntax.applicative._
 import cats.syntax.functor._
 import fs2.Stream
@@ -170,9 +170,9 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
   }
 
   def assertResultBytes(
-      ds: Datasource[IO, Stream[IO, ?], ResourcePath, QueryResult[IO]],
-      path: ResourcePath,
-      expected: Array[Byte]) =
+                         ds: Datasource[IO, Stream[IO, ?], ResourcePath, QueryResult[IO]],
+                         path: ResourcePath,
+                         expected: Array[Byte]) =
     ds.evaluate(path) flatMap {
       case QueryResult.Typed(_, data) =>
         data.compile.to[Array].map(_ must_=== expected)
@@ -184,7 +184,9 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
   def assertPrefixedChildPaths(path: ResourcePath, expected: List[(ResourceName, ResourcePathType)]) =
     OptionT(datasource.prefixedChildPaths(path))
       .getOrElseF(IO.raiseError(new Exception(s"Failed to list resources under $path")))
-      .flatMap(gatherMultiple(_)).map { _ must_== expected }
+      .flatMap(gatherMultiple(_)).map {
+      _ must_== expected
+    }
 
   def gatherMultiple[A](g: Stream[IO, A]) = g.compile.toList
 
@@ -194,12 +196,14 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
 
   val run = λ[IO ~> Id](_.unsafeRunSync)
 
-  def mkDatasource[F[_]: ConcurrentEffect: MonadResourceErr](config: S3Config)
-      : F[Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]]] = {
+  def mkDatasource[F[_] : ConcurrentEffect : MonadResourceErr](config: S3Config)
+  : F[Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]]] = {
 
     val ec = ExecutionContext.Implicits.global
-    val builder = BlazeClientBuilder[F](ec)
-    val client = unsafeResource(builder.resource)
+    val builder = BlazeClientBuilder[F](ec).allocate
+    // FIXME: eliminate inheritance from DatasourceSpec and sequence the resource instead of
+    // ignoring clean up here.
+    val client = builder.map(_._1)
     val signingClient = client.map(AwsV4Signing(config))
 
     signingClient map (new S3Datasource[F](_, config))
@@ -207,11 +211,6 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
 
   val datasourceLD = run(mkDatasource[IO](S3Config(testBucket, S3JsonParsing.LineDelimited, None, None)))
   val datasource = run(mkDatasource[IO](S3Config(testBucket, S3JsonParsing.JsonArray, None, None)))
-
-  // FIXME: eliminate inheritance from DatasourceSpec and sequence the resource instead of
-  // ignoring clean up here.
-  private def unsafeResource[F[_]: Effect, A](r: Resource[F, A]): F[A] =
-    Disposable.fromResource(r).map(_.unsafeValue)
 }
 
 object S3DatasourceSpec {
