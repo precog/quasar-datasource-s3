@@ -87,8 +87,8 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
       assertPrefixedChildPaths(
         ResourcePath.root(),
         List(
-          ResourceName("dir1") -> ResourcePathType.prefix,
           ResourceName("extraSmallZips.data") -> ResourcePathType.leafResource,
+          ResourceName("dir1") -> ResourcePathType.prefix,
           ResourceName("prefix3") -> ResourcePathType.prefix,
           ResourceName("testData") -> ResourcePathType.prefix))
     }
