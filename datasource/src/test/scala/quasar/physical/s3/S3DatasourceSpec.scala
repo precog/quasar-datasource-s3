@@ -170,9 +170,9 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
   }
 
   def assertResultBytes(
-                         ds: Datasource[IO, Stream[IO, ?], ResourcePath, QueryResult[IO]],
-                         path: ResourcePath,
-                         expected: Array[Byte]) =
+      ds: Datasource[IO, Stream[IO, ?], ResourcePath, QueryResult[IO]],
+      path: ResourcePath,
+      expected: Array[Byte]) =
     ds.evaluate(path) flatMap {
       case QueryResult.Typed(_, data) =>
         data.compile.to[Array].map(_ must_=== expected)
