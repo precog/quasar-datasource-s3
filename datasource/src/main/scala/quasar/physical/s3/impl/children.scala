@@ -51,18 +51,11 @@ import scalaz.{\/-, -\/}
 import shims._
 
 object children {
-  // S3 provides a recursive listing (akin to `find` or
-  // `dirtree`); we filter out children that aren't direct
-  // children. We can only list 1000 keys, and need pagination
-  // to do more. That's 1000 *recursively listed* keys, so we
-  // could conceivably list *none* of the direct children of a
-  // folder without pagination, depending on the order AWS
-  // sends them in.
-  //
   // FIXME: dir should be ADir and pathToDir should be deleted
   def apply[F[_]: Effect](client: Client[F], bucket: Uri, dir: APath)
       : F[Option[Stream[F, PathSegment]]] = {
     val msg = "Unexpected failure when streaming a multi-page response for ListBuckets"
+
     val stream0 =
       handleS3(fetchResults(client, bucket, dir, None)) map (results =>
         Stream.iterateEval(results) {
@@ -96,8 +89,7 @@ object children {
       .map(_.leftMap(Stream.emits(_)))
 
   private def toPathSegment[F[_]](s: Stream[F, APath], dir: APath): Stream[F, PathSegment] =
-    s.filter(_ =!= dir)
-     .filter(Path.parentDir(_) === pathToDir(dir))
+    s.filter(Path.parentDir(_) === pathToDir(dir))
      .flatMap(p => Stream.emits(Path.peel(p).toList))
      .map(_._2)
 
@@ -134,7 +126,7 @@ object children {
     // Converts a pathy Path to an S3 object prefix.
     val objectPrefix = aPathToObjectPrefix(dir)
     val prefix = objectPrefix.map(("prefix", _)).getOrElse(("prefix", "")).some
-    val delimiter = objectPrefix.fold(("delimiter", "/").some)(_ => none)
+    val delimiter = ("delimiter", "/").some
 
     val ct0 = ct.map(_.value).map(("continuation-token", _))
 
@@ -182,7 +174,7 @@ object children {
         .flatMap(_.traverse[Either[S3Error, ?], APath](pth =>
           Either.fromOption(s3NameToPath(pth), noParsePrefixesMsg)))
 
-    val allPaths = (childPaths, prefixesPaths) match {
+    val allPaths = (prefixesPaths, childPaths) match {
       case (Left(errL), Left(errR)) =>
         S3Error.UnexpectedResponse("No prefixes or objects in response").asLeft
       case (Right(listing), Left(_)) => listing.asRight
@@ -201,7 +193,7 @@ object children {
     // the first `/`, because object prefixes can't
     // begin with `/`.
     if (apath =!= Path.rootDir) {
-      Path.posixCodec.printPath(apath).drop(1).self.some // .replace("/", "%2F")
+      pathToDir(apath).map(Path.posixCodec.printPath(_).drop(1).self)
     }
     else {
       none[String]
