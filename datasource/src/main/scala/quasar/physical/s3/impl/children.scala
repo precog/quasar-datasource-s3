@@ -89,9 +89,7 @@ object children {
       .map(_.leftMap(Stream.emits(_)))
 
   private def toPathSegment[F[_]](s: Stream[F, APath], dir: APath): Stream[F, PathSegment] =
-    s.filter(Path.parentDir(_) === pathToDir(dir))
-     .flatMap(p => Stream.emits(Path.peel(p).toList))
-     .map(_._2)
+    s.flatMap(p => Stream.emits(Path.peel(p).toList)).map(_._2)
 
   private def listObjects[F[_]: Effect](
     client: Client[F],
@@ -126,12 +124,13 @@ object children {
     // Converts a pathy Path to an S3 object prefix.
     val objectPrefix = aPathToObjectPrefix(dir)
     val prefix = objectPrefix.map(("prefix", _)).getOrElse(("prefix", "")).some
+    val startAfter = objectPrefix.map(("start-after", _))
     val delimiter = ("delimiter", "/").some
 
     val ct0 = ct.map(_.value).map(("continuation-token", _))
 
     val q = Query.fromString(s3EncodeQueryParams(
-      List(listType, delimiter, prefix, ct0).unite.toMap))
+      List(listType, delimiter, prefix, startAfter, ct0).unite.toMap))
 
     Request[F](uri = listingQuery.copy(query = q))
   }
