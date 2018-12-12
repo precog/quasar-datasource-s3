@@ -17,16 +17,19 @@
 package quasar.physical.s3
 
 import slamdata.Predef._
-import argonaut.{DecodeJson, DecodeResult, EncodeJson, Json}
+import quasar.connector.CompressionScheme
+
+import argonaut._ , Argonaut._
 import org.http4s.Uri
-import cats.syntax.apply._
-import cats.syntax.flatMap._
-import cats.instances.option._
+import monocle.Prism
 import scalaz.syntax.show._
-import slamdata.Predef._
 import shims._
 
-final case class S3Config(bucket: Uri, parsing: S3JsonParsing, credentials: Option[S3Credentials])
+final case class S3Config(
+    bucket: Uri,
+    parsing: S3JsonParsing,
+    compressionScheme: Option[CompressionScheme],
+    credentials: Option[S3Credentials])
 
 final case class AccessKey(value: String)
 final case class SecretKey(value: String)
@@ -35,109 +38,59 @@ final case class Region(name: String)
 final case class S3Credentials(accessKey: AccessKey, secretKey: SecretKey, region: Region)
 
 object S3Config {
-  /*  Example configuration for public buckets with line-delimited JSON:
-   *  {
-   *    "bucket": "<uri to bucket>",
-   *    "jsonParsing": "lineDelimited"
-   *  }
-   *
-   *  Example configuration for public buckets with array JSON:
-   *  {
-   *    "bucket": "<uri to bucket>",
-   *    "jsonParsing": "array"
-   *  }
-   *
-   *  Example configuration for a secure bucket with array JSON:
-   *  {
-   *    "bucket":"https://some.bucket.uri",
-   *    "jsonParsing":"array",
-   *    "credentials": {
-   *      "accessKey":"some access key",
-   *      "secretKey":"super secret key",
-   *      "region":"us-east-1"
-   *    }
-   *  }
-   *
-   *  Example configuration for a secure bucket with line-delimited JSON:
-   *  {
-   *    "bucket":"https://some.bucket.uri",
-   *    "jsonParsing":"lineDelimited",
-   *    "credentials": {
-   *      "accessKey":"some access key",
-   *      "secretKey":"super secret key",
-   *      "region":"us-east-1"
-   *    }
-   *  }
-   *
-   */
+
   private val parseStrings =
     Map[String, S3JsonParsing](
       "array" -> S3JsonParsing.JsonArray,
       "lineDelimited" -> S3JsonParsing.LineDelimited)
 
+  private val compressionSchemePrism: Prism[String, CompressionScheme] =
+    Prism.partial[String, CompressionScheme] {
+      case "gzip" => CompressionScheme.Gzip
+    } {
+      case CompressionScheme.Gzip  => "gzip"
+    }
+
   private val failureMsg =
     "Failed to parse configuration for S3 connector."
 
-  implicit val decodeJson: DecodeJson[S3Config] =
-    DecodeJson { c =>
-      val b = c.get[String]("bucket").toOption >>= (Uri.fromString(_).toOption)
-      val jp = c.get[String]("jsonParsing").toOption >>= (parseStrings.get(_))
 
-      (c.downField("credentials").success, b, jp) match {
-        case (Some(_), Some(bk), Some(p)) => {
-          val creds = DecodeJson.of[S3Credentials].decode(c)
+  implicit val uriCodec: CodecJson[Uri] = CodecJson(
+    u => Json.jString(u.renderString),
+    optionDecoder(_.as[String].toOption.flatMap(Uri.fromString(_).toOption), "Uri").decode(_))
 
-          creds.toOption match {
-            case Some(creds0) => DecodeResult.ok(S3Config(bk, p, Some(creds0)))
-            case None => DecodeResult.fail(creds.message.getOrElse(failureMsg), c.history)
-          }
-        }
+  implicit val jsonParsingCodec: CodecJson[S3JsonParsing] = CodecJson[S3JsonParsing](
+    p => Json.jString(p.shows),
+    optionDecoder(_.as[String].toOption.flatMap(s => parseStrings.get(s)), "jsonParsing").decode
+  ).setName("Unrecognized jsonParsing field")
 
-        case (None, Some(bk), Some(p)) =>
-          DecodeResult.ok(S3Config(bk, p, None))
+  implicit val compressionSchemeCodec: CodecJson[CompressionScheme] = CodecJson[CompressionScheme](
+    { cs => Json.jString(compressionSchemePrism(cs)) },
+    { optionDecoder(_.as[String].toOption.flatMap(s => compressionSchemePrism.getOption(s)), "compressionScheme").decode }
+  ).setName("Unrecognized compression scheme")
 
-        case _ =>
-          DecodeResult.fail(failureMsg, c.history)
-      }
-    }
+  implicit val configCodec: CodecJson[S3Config] =
+    casecodec4(
+      S3Config.apply, S3Config.unapply)(
+      "bucket", "jsonParsing", "compressionScheme", "credentials")
+      .setName(failureMsg)
 
-  implicit val encodeJson: EncodeJson[S3Config] =
-    EncodeJson(config => config.credentials.fold(
-      Json.obj(
-        "bucket" -> Json.jString(config.bucket.renderString),
-        "jsonParsing" -> Json.jString(config.parsing.shows)))
-      (creds => Json.obj(
-        "bucket" -> Json.jString(config.bucket.renderString),
-        "jsonParsing" -> Json.jString(config.parsing.shows),
-        "credentials" -> Json.obj(
-          "accessKey" -> Json.jString(creds.accessKey.value),
-          "secretKey" -> Json.jString(creds.secretKey.value),
-          "region"    -> Json.jString(creds.region.name)))))
 }
 
 object S3Credentials {
-  private val incompleteCredsMsg =
-    "The 'credentials' key must include 'accessKey', 'secretKey', and 'region'"
+  implicit val accessKeyCodec: CodecJson[AccessKey] =
+    CodecJson(_.value.asJson, jdecode1(AccessKey(_)).decode)
 
-  implicit val decodeJson: DecodeJson[S3Credentials] =
-    DecodeJson { c =>
-      val creds = c.downField("credentials")
-      val akey = creds.get[String]("accessKey").map(AccessKey(_)).toOption
-      val skey = creds.get[String]("secretKey").map(SecretKey(_)).toOption
-      val rkey = creds.get[String]("region").map(Region(_)).toOption
+  implicit val secretKeyCodec: CodecJson[SecretKey] =
+    CodecJson(_.value.asJson, jdecode1(SecretKey(_)).decode)
 
-      (akey, skey, rkey).mapN(S3Credentials(_, _, _)) match {
-        case Some(creds0) => DecodeResult.ok(creds0)
-        case None => DecodeResult.fail(incompleteCredsMsg, c.history)
-      }
-    }
+  implicit val regionCodec: CodecJson[Region] =
+    CodecJson(_.name.asJson, jdecode1(Region(_)).decode)
 
-  implicit val encodeJson: EncodeJson[S3Credentials] =
-    EncodeJson { creds =>
-      Json.obj(
-        "accessKey" -> Json.jString(creds.accessKey.value),
-        "secretKey" -> Json.jString(creds.secretKey.value),
-        "region"    -> Json.jString(creds.region.name))
-    }
+  implicit val credentialsCodec: CodecJson[S3Credentials] =
+    casecodec3(
+      S3Credentials.apply, S3Credentials.unapply)(
+      "accessKey", "secretKey", "region"
+    ).setName("Credentials must include 'accessKey', 'secretKey', and 'region'")
 
 }

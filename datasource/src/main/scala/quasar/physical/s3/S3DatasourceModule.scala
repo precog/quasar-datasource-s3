@@ -16,6 +16,7 @@
 
 package quasar.physical.s3
 
+import slamdata.Predef.{Stream => _, _}
 import quasar.Disposable
 import quasar.api.datasource.{DatasourceError, DatasourceType}
 import quasar.api.datasource.DatasourceError.InitializationError
@@ -26,24 +27,29 @@ import quasar.physical.s3.S3Datasource.{Live, NotLive, Redirected}
 import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext
 
-import argonaut.{EncodeJson, Json}
+import argonaut.Json
+import argonaut.ArgonautScalaz._
 import cats.effect.{ConcurrentEffect, ContextShift, Timer}
 import cats.instances.tuple._
 import cats.syntax.applicative._
 import cats.syntax.bifunctor._
+import cats.syntax.eq._
 import cats.syntax.flatMap._
-import cats.syntax.option._
 import fs2.Stream
 import org.http4s.client.Client
 import org.http4s.client.blaze.BlazeClientBuilder
 import org.http4s.client.middleware.FollowRedirect
+import scalaz.{NonEmptyList, \/}
 import scalaz.syntax.either._
 import scalaz.syntax.functor._
-import scalaz.{NonEmptyList, \/}
 import shims._
-import slamdata.Predef.{Stream => _, _}
 
 object S3DatasourceModule extends LightweightDatasourceModule {
+
+  private val MaxRedirects = 3
+  private val Redacted = "<REDACTED>"
+  private val RedactedCreds = S3Credentials(AccessKey(Redacted), SecretKey(Redacted), Region(Redacted))
+
   def kind: DatasourceType = s3.datasourceKind
 
   @SuppressWarnings(Array("org.wartremover.warts.ImplicitParameter"))
@@ -81,20 +87,16 @@ object S3DatasourceModule extends LightweightDatasourceModule {
           .left.pure[F]
     }
 
-  def sanitizeConfig(config: Json): Json = {
-    val redactedCreds =
-      S3Credentials(AccessKey(Redacted), SecretKey(Redacted), Region(Redacted))
+  override def sanitizeConfig(config: Json): Json = {
+    val sanitized = for {
+      creds <- config.cursor --\ "credentials"
 
-    config.as[S3Config].result.toOption.map((c: S3Config) =>
-      // ignore the existing credentials and replace them with redactedCreds
-      c.credentials.fold(c)(_ => c.copy(credentials = redactedCreds.some)))
-      .fold(config)(rc => EncodeJson.of[S3Config].encode(rc))
+      redacted =
+        if (creds.focus === Json.jNull) creds
+        else creds.set(S3Credentials.credentialsCodec.encode(RedactedCreds))
+    } yield redacted.undo
+    sanitized.getOrElse(config)
   }
-
-  ///
-
-  private val MaxRedirects = 3
-  private val Redacted = "<REDACTED>"
 
   @SuppressWarnings(Array("org.wartremover.warts.ImplicitParameter"))
   private def mkClient[F[_]: ConcurrentEffect](conf: S3Config)
