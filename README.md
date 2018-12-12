@@ -16,14 +16,21 @@ The configuration of the S3 datasource has the following JSON format
 {
   "bucket": String,
   "jsonParsing": "array" | "lineDelimited",
+  ["compressionScheme": "gzip",]
   ["credentials": Object]
 }
 ```
 
 * `bucket` the URL of the S3 bucket to use, e.g. `https://yourbucket.s3.amazonaws.com`
-* `jsonParsing` the format of the resources that are assumed to be in the container. Currently array-wrapped (`"array"`) and line-delimited (`"lineDelimited"`) are supported.
-* `credentials` (optional, default = empty) S3 credentials to use for access in case the bucket is not public. Object has the following format: `{ "accessKey": String, "secretKey": String, "region": String }`.
-  The `credentials` section can be omitted completely for public buckets, but for private buckets the section needs to be there with all 3 fields specified. 
+* `jsonParsing` the format of the resources that are assumed to be in the container. Currently array-wrapped 
+  (`"array"`) and line-delimited (`"lineDelimited"`) are supported.
+* `compressionScheme` (optional, default = empty) compression scheme that the resources in the container are assumed 
+  to be compressed with. Currrently gzip (`"gzip"`) is supported.
+  If omitted, the resources are not assumed to be compressed.
+* `credentials` (optional, default = empty) S3 credentials to use for access in case the bucket is not public. 
+  Object has the following format: `{ "accessKey": String, "secretKey": String, "region": String }`.
+  The `credentials` section can be omitted completely for public buckets, but for private buckets the section needs 
+  to be there with all 3 fields specified.
 
 Example:
 
@@ -31,6 +38,7 @@ Example:
 {
   "bucket": "https://yourbucket.s3.amazonaws.com",
   "jsonParsing": "array",
+  "compressionScheme": "gzip",
   "credentials": {
     "accessKey": "some access key",
     "secretKey": "super secret key",

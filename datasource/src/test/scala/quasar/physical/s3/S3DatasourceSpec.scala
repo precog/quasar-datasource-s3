@@ -20,8 +20,7 @@ import slamdata.Predef._
 
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.common.data.Data
-import quasar.connector.{Datasource, DatasourceSpec, MonadResourceErr, QueryResult, ResourceError}
-import quasar.connector.ResourceError
+import quasar.connector._
 import quasar.contrib.scalaz.MonadError_
 
 import java.nio.charset.Charset
@@ -159,7 +158,7 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
 
     "reading a non-existent file raises ResourceError.PathNotFound" >> {
       val creds = EitherT.right[Throwable](credentials)
-      val ds = creds.flatMap(mkDatasource[G](S3JsonParsing.JsonArray, testBucket, _))
+      val ds = creds.flatMap(c => mkDatasource[G](S3Config(testBucket, S3JsonParsing.JsonArray, None, c)))
 
       val path = ResourcePath.root() / ResourceName("does-not-exist")
       val read: G[QueryResult[G]] = ds.flatMap(_.evaluate(path))
@@ -199,25 +198,21 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
 
   val run = λ[IO ~> Id](_.unsafeRunSync)
 
-  def mkDatasource[F[_]: ConcurrentEffect: MonadResourceErr](
-    parsing: S3JsonParsing,
-    bucket: Uri,
-    creds: Option[S3Credentials])
-      : F[Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]]] = {
+  def mkDatasource[F[_] : ConcurrentEffect : MonadResourceErr](config: S3Config)
+  : F[Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]]] = {
 
-    val testConfig = S3Config(bucket, parsing, creds)
     val ec = ExecutionContext.Implicits.global
     val builder = BlazeClientBuilder[F](ec).allocate
     // FIXME: eliminate inheritance from DatasourceSpec and sequence the resource instead of
     // ignoring clean up here.
     val client = builder.map(_._1)
-    val signingClient = client.map(AwsV4Signing(testConfig))
+    val signingClient = client.map(AwsV4Signing(config))
 
-    signingClient map (new S3Datasource[F](_, S3Config(bucket, parsing, creds)))
+    signingClient map (new S3Datasource[F](_, config))
   }
 
-  val datasourceLD = run(mkDatasource[IO](S3JsonParsing.LineDelimited, testBucket, None))
-  val datasource = run(mkDatasource[IO](S3JsonParsing.JsonArray, testBucket, None))
+  val datasourceLD = run(mkDatasource[IO](S3Config(testBucket, S3JsonParsing.LineDelimited, None, None)))
+  val datasource = run(mkDatasource[IO](S3Config(testBucket, S3JsonParsing.JsonArray, None, None)))
 }
 
 object S3DatasourceSpec {

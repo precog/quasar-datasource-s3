@@ -59,8 +59,10 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
           case S3JsonParsing.LineDelimited => JsonVariant.LineDelimited
         }
 
-        impl.evaluate[F](client, config.bucket, file)
-          .map(QueryResult.typed(ParsableType.json(jvar, false), _))
+        impl.evaluate[F](client, config.bucket, file) map { bytes =>
+          val qr = QueryResult.typed(ParsableType.json(jvar, false), bytes)
+          config.compressionScheme.fold(qr)(QueryResult.compressed(_, qr))
+        }
     }
 
   def prefixedChildPaths(path: ResourcePath): F[Option[Stream[F, (ResourceName, ResourcePathType)]]] =
