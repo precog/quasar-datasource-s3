@@ -26,6 +26,7 @@ import org.http4s.Uri
 import org.http4s.client.blaze.BlazeClientBuilder
 import org.specs2.mutable.Specification
 import pathy.Path
+import scalaz.{-\/, \/-}
 
 final class ChildrenSpec extends Specification {
   "lists all resources at the root of the bucket, one per request" >> {
@@ -41,10 +42,11 @@ final class ChildrenSpec extends Specification {
       .getOrElseF(IO.raiseError(new Exception("Could not list children under the root")))
       .flatMap(_.compile.toList).map { children =>
         children.length must_== 4
-        children(0).toEither must_== Right(Path.FileName("extraSmallZips.data"))
-        children(1).toEither must_== Left(Path.DirName("dir1"))
-        children(2).toEither must_== Left(Path.DirName("prefix3"))
-        children(3).toEither must_== Left(Path.DirName("testData"))
+        children.toSet must_==
+          Set(\/-(Path.FileName("extraSmallZips.data")),
+              -\/(Path.DirName("dir1")),
+              -\/(Path.DirName("prefix3")),
+              -\/(Path.DirName("testData")))
       }.unsafeRunSync
   }
 }

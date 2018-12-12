@@ -184,9 +184,11 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
   def assertPrefixedChildPaths(path: ResourcePath, expected: List[(ResourceName, ResourcePathType)]) =
     OptionT(datasource.prefixedChildPaths(path))
       .getOrElseF(IO.raiseError(new Exception(s"Failed to list resources under $path")))
-      .flatMap(gatherMultiple(_)).map {
-      _ must_== expected
-    }
+      .flatMap(gatherMultiple(_)).map(result => {
+        // assert the same elements, with no duplicates
+        result.length must_== expected.length
+        result.toSet must_== expected.toSet
+      })
 
   def gatherMultiple[A](g: Stream[IO, A]) = g.compile.toList
 
