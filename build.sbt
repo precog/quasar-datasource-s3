@@ -44,8 +44,7 @@ lazy val core = project
       "org.scala-lang.modules" %% "scala-xml"           % scalaXmlVersion,
       "com.codecommit"         %% "shims"               % shimsVersion,
       "org.typelevel"          %% "cats-effect"         % catsEffectVersion,
-      "com.slamdata"           %% "quasar-foundation-internal"
-                                                        % quasarVersion % Test classifier "tests",
+      "com.slamdata"           %% "quasar-foundation"   % quasarVersion % Test classifier "tests",
       "org.http4s"             %% "http4s-dsl"          % http4sVersion % Test,
       "org.specs2"             %% "specs2-core"         % specsVersion % Test,
       "org.specs2"             %% "specs2-scalaz"       % specsVersion % Test,
