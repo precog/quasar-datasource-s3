@@ -36,11 +36,11 @@ object Dependencies {
   // to keep from packaging it and its dependencies. TODO: we should
   // do this in the assembly routine.
   def datasource = datasourceCore ++ Seq(
-    "com.slamdata" %% "quasar-api-internal"        % quasarVersion,
-    "com.slamdata" %% "quasar-api-internal"        % quasarVersion % Test classifier "tests",
-    "com.slamdata" %% "quasar-foundation-internal" % quasarVersion,
-    "com.slamdata" %% "quasar-foundation-internal" % quasarVersion % Test classifier "tests",
-    "com.slamdata" %% "quasar-connector-internal"  % quasarVersion,
-    "com.slamdata" %% "quasar-connector-internal"  % quasarVersion % Test classifier "tests",
+    "com.slamdata" %% "quasar-api"        % quasarVersion,
+    "com.slamdata" %% "quasar-api"        % quasarVersion % Test classifier "tests",
+    "com.slamdata" %% "quasar-foundation" % quasarVersion,
+    "com.slamdata" %% "quasar-foundation" % quasarVersion % Test classifier "tests",
+    "com.slamdata" %% "quasar-connector"  % quasarVersion,
+    "com.slamdata" %% "quasar-connector"  % quasarVersion % Test classifier "tests",
   )
 }
