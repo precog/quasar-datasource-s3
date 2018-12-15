@@ -20,8 +20,7 @@ import slamdata.Predef.{Stream => _, _}
 import quasar.Disposable
 import quasar.api.datasource.{DatasourceError, DatasourceType}
 import quasar.api.datasource.DatasourceError.InitializationError
-import quasar.api.resource.ResourcePath
-import quasar.connector.{Datasource, LightweightDatasourceModule, MonadResourceErr, QueryResult}
+import quasar.connector.{LightweightDatasourceModule, MonadResourceErr}
 import quasar.physical.s3.S3Datasource.{Live, NotLive, Redirected}
 
 import scala.concurrent.duration.Duration
@@ -35,7 +34,6 @@ import cats.syntax.applicative._
 import cats.syntax.bifunctor._
 import cats.syntax.eq._
 import cats.syntax.flatMap._
-import fs2.Stream
 import org.http4s.client.Client
 import org.http4s.client.blaze.BlazeClientBuilder
 import org.http4s.client.middleware.FollowRedirect
@@ -55,7 +53,7 @@ object S3DatasourceModule extends LightweightDatasourceModule {
   @SuppressWarnings(Array("org.wartremover.warts.ImplicitParameter"))
   def lightweightDatasource[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
     config: Json)(implicit ec: ExecutionContext)
-      : F[InitializationError[Json] \/ Disposable[F, Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]]]] =
+      : F[InitializationError[Json] \/ Disposable[F, DS[F]]] =
     config.as[S3Config].result match {
       case Right(s3Config) =>
         mkClient(s3Config).flatMap { disposableClient =>
@@ -66,11 +64,11 @@ object S3DatasourceModule extends LightweightDatasourceModule {
 
           s3Ds.isLive(MaxRedirects) map {
             case Redirected(newConfig) =>
-              val ds: Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]] =
+              val ds: DS[F] =
                 new S3Datasource[F](redirectClient, newConfig)
-              Disposable(ds, disposableClient.dispose).right
+              Disposable(ds, disposableClient.dispose).right[InitializationError[Json]]
             case Live =>
-              val ds: Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]] =
+              val ds: DS[F] =
                 new S3Datasource[F](redirectClient, s3Config)
               Disposable(ds, disposableClient.dispose).right
             case NotLive =>
