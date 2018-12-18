@@ -40,6 +40,8 @@ import shims._
 import S3DatasourceSpec._
 
 class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
+  import S3DatasourceModule.DS
+
   def iRead[A](path: A): InterpretedRead[A] = InterpretedRead(path, List())
 
   val testBucket = Uri.uri("https://s3.amazonaws.com/slamdata-public-test")
@@ -173,7 +175,7 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
   }
 
   def assertResultBytes(
-      ds: Datasource[IO, Stream[IO, ?], InterpretedRead[ResourcePath], QueryResult[IO]],
+      ds: DS[IO],
       path: ResourcePath,
       expected: Array[Byte]) =
     ds.evaluate(iRead(path)) flatMap {
@@ -201,8 +203,8 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
 
   val run = λ[IO ~> Id](_.unsafeRunSync)
 
-  def mkDatasource[F[_] : ConcurrentEffect : MonadResourceErr](config: S3Config)
-  : F[Datasource[F, Stream[F, ?], InterpretedRead[ResourcePath], QueryResult[F]]] = {
+  def mkDatasource[F[_] : ConcurrentEffect : MonadResourceErr](
+      config: S3Config): F[DS[F]] = {
 
     val ec = ExecutionContext.Implicits.global
     val builder = BlazeClientBuilder[F](ec).allocate

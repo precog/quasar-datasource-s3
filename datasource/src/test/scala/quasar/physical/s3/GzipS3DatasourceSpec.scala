@@ -18,21 +18,22 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 import quasar.api.resource.ResourcePath
-import quasar.connector.{CompressionScheme, Datasource, QueryResult}
+import quasar.connector.{CompressionScheme, QueryResult}
 import quasar.physical.s3.SecureS3DatasourceSpec._
 import quasar.qscript.InterpretedRead
 
 import cats.effect.IO
 import cats.syntax.flatMap._
-import fs2.Stream
 import org.http4s.Uri
 import shims._
 
 final class GzipS3DatasourceSpec extends S3DatasourceSpec {
+  import S3DatasourceModule.DS
+
   override val testBucket = Uri.uri("https://s3.amazonaws.com/slamdata-public-gzip-test")
 
   override def assertResultBytes(
-      ds: Datasource[IO, Stream[IO, ?], InterpretedRead[ResourcePath], QueryResult[IO]],
+      ds: DS[IO],
       path: ResourcePath,
       expected: Array[Byte]) =
     ds.evaluate(InterpretedRead(path, List())) flatMap {
