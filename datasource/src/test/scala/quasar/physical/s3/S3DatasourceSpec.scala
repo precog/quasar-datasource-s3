@@ -22,6 +22,7 @@ import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.common.data.Data
 import quasar.connector._
 import quasar.contrib.scalaz.MonadError_
+import quasar.qscript.InterpretedRead
 
 import java.nio.charset.Charset
 import scala.concurrent.ExecutionContext
@@ -39,6 +40,10 @@ import shims._
 import S3DatasourceSpec._
 
 class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
+  import S3DatasourceModule.DS
+
+  def iRead[A](path: A): InterpretedRead[A] = InterpretedRead(path, List())
+
   val testBucket = Uri.uri("https://s3.amazonaws.com/slamdata-public-test")
   val nonExistentPath =
     ResourcePath.root() / ResourceName("does") / ResourceName("not") / ResourceName("exist")
@@ -161,7 +166,7 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
       val ds = creds.flatMap(c => mkDatasource[G](S3Config(testBucket, S3JsonParsing.JsonArray, None, c)))
 
       val path = ResourcePath.root() / ResourceName("does-not-exist")
-      val read: G[QueryResult[G]] = ds.flatMap(_.evaluate(path))
+      val read: G[QueryResult[G]] = ds.flatMap(_.evaluate(iRead(path)))
 
       run(read.value) must beLeft.like {
         case ResourceError.throwableP(ResourceError.PathNotFound(_)) => ok
@@ -170,11 +175,11 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
   }
 
   def assertResultBytes(
-      ds: Datasource[IO, Stream[IO, ?], ResourcePath, QueryResult[IO]],
+      ds: DS[IO],
       path: ResourcePath,
       expected: Array[Byte]) =
-    ds.evaluate(path) flatMap {
-      case QueryResult.Typed(_, data) =>
+    ds.evaluate(iRead(path)) flatMap {
+      case QueryResult.Typed(_, data, List()) =>
         data.compile.to[Array].map(_ must_=== expected)
 
       case _ =>
@@ -198,8 +203,8 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
 
   val run = λ[IO ~> Id](_.unsafeRunSync)
 
-  def mkDatasource[F[_] : ConcurrentEffect : MonadResourceErr](config: S3Config)
-  : F[Datasource[F, Stream[F, ?], ResourcePath, QueryResult[F]]] = {
+  def mkDatasource[F[_] : ConcurrentEffect : MonadResourceErr](
+      config: S3Config): F[DS[F]] = {
 
     val ec = ExecutionContext.Implicits.global
     val builder = BlazeClientBuilder[F](ec).allocate

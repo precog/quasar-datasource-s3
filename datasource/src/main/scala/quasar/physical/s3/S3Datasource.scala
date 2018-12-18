@@ -22,6 +22,7 @@ import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.connector.{MonadResourceErr, ParsableType, QueryResult, ResourceError}
 import quasar.connector.datasource.LightweightDatasource
 import quasar.contrib.scalaz.MonadError_
+import quasar.qscript.InterpretedRead
 
 import slamdata.Predef.{Stream => _, _}
 
@@ -48,10 +49,10 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
 
   def kind: DatasourceType = s3.datasourceKind
 
-  def evaluate(path: ResourcePath): F[QueryResult[F]] =
-    path match {
+  def evaluate(iRead: InterpretedRead[ResourcePath]): F[QueryResult[F]] =
+    iRead.path match {
       case Root =>
-        MonadError_[F, ResourceError].raiseError(ResourceError.notAResource(path))
+        MonadError_[F, ResourceError].raiseError(ResourceError.notAResource(iRead.path))
 
       case Leaf(file) =>
         val jvar = config.parsing match {
@@ -60,7 +61,7 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
         }
 
         impl.evaluate[F](client, config.bucket, file) map { bytes =>
-          val qr = QueryResult.typed(ParsableType.json(jvar, false), bytes)
+          val qr = QueryResult.typed(ParsableType.json(jvar, false), bytes, iRead.instructions)
           config.compressionScheme.fold(qr)(QueryResult.compressed(_, qr))
         }
     }
