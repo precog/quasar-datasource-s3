@@ -52,9 +52,8 @@ jobs:
         - bumpInDownstream() { echo $1 > slamdata-s3-version; }
         - export -f bumpInDownstream
         - scripts/bumpDependentProject slamdata slamx bumpInDownstream
-
-    - git:
-        depth: false
+  git:
+    depth: false
 
 after_success:
   - scripts/checkAndAutoMerge
