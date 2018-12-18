@@ -5,16 +5,16 @@ dist: trusty
 sudo: false
 
 stages:
-- name: test
-- name: publish
-  if: NOT type = pull_request
+  - name: test
+  - name: publish
+    if: NOT type = pull_request
 
 cache:
   directories:
-  - $HOME/.ivy2/cache
-  - $HOME/.sbt
-  - $HOME/.coursier/cache
-  - '.hoarder-cache'
+    - $HOME/.ivy2/cache
+    - $HOME/.sbt
+    - $HOME/.coursier/cache
+    - '.hoarder-cache'
 
 env:
   global:
@@ -30,54 +30,44 @@ env:
     - secure: "iSUPH0sZb9jT+qeTYPOMNJlIxmyGx8gB4qo4SjcFnaSp4YYJJ2DLwMxXaesyBoU9JyF+jSTKOIZJttFAouglbW4YgLl22x+Wihcs86AyJfYz9I9GwL0pF3iwBbc3pyt9+ghK6EVt2MDlTdFGihBVTGw9Pye+uHsUOPiin/v2GBxLz6HZtyYVWx6eLRSB3nNEgaWpQXkAy1kKAD06nl9jOPBlT70ahgX6kmtvoa+BrMJBhvRoGH7pOOIVox8cl0UMta4VCkDb9BmxK6npFoBfy0/svwoTCF2FCBi71E8xhUXr5sAxZ3AphIOaiDDpZvW7po+C1O7+jX+uM26jMZ+ekh9SSHtdFtWW/dl/lM4Jprd8yjrssed4hw34yXT/YMtWjoaZ75ly7/BfT1mQRUZkWs8fBnoyDdYH/ZW20jo6ahpQc+TFyzy0tRSWRIMLTXWzNl2DtCcjjwW2NM8iT0FQuOVhu2YCPF1ni5xgcb7RejPQgvTD4cpSv0vTO3Fu+mPx2nrHs0lG7SGSMEoXD+mlPqbSb/uacBEyKjP0zVbt2EZPjOzw6TPI4tbAoltOlHH+bzsJfhbkpnxNaczJL6QjLGTJZXkCRB0/1ka/GSYnBDiS9Y3EG9Z5CuudBT7zEkAVNlAnTTXgbrW0LIE0HWy5BQNOxxBRuQeA0mow8IVrnSI="
 
 install:
-  - gem install octokit
-
-  - git config --global user.email "bot@slamdata.com"
-  - git config --global user.name "SlamData Bot"
+  - mkdir scripts
+  - $SBT transferCommonResources
+  - scripts/commonSetup
 
 jobs:
   include:
-  - stage: test
-    script:
-    - set -e
-    # Just protecting against automated scrapers
-    - base64 -d testCredentials.json.b64 > testCredentials.json
-    - $SBT ++$TRAVIS_SCALA_VERSION test
+    - stage: test
+      script:
+      - set -e
+      # Just protecting against automated scrapers
+      - base64 -d testCredentials.json.b64 > testCredentials.json
+      - $SBT ++$TRAVIS_SCALA_VERSION test
 
-  - stage: publish
-    env:
-    script:
-    - set -e
-    - $SBT transferPublishAndTagResources
-    - TRAVIS_JOB_NUMBER=1 scripts/publishAndTag 'slamdata/quasar-datasource-s3'
-    - bumpInDownstream() { echo $1 > slamdata-s3-version; }
-    - export -f bumpInDownstream
-    - scripts/bumpDependentProject slamdata slamx bumpInDownstream
+    - stage: publish
+      env:
+      script:
+        - set -e
+        - $SBT transferPublishAndTagResources
+        - TRAVIS_JOB_NUMBER=1 scripts/publishAndTag 'slamdata/quasar-datasource-s3'
+        - bumpInDownstream() { echo $1 > slamdata-s3-version; }
+        - export -f bumpInDownstream
+        - scripts/bumpDependentProject slamdata slamx bumpInDownstream
 
     git:
       depth: false
 
 after_success:
-  - |
-    if [ $TRAVIS_PULL_REQUEST != "false" ] && [[ $TRAVIS_PULL_REQUEST_BRANCH =~ 'version-bump' ]]; then
-      clone_dir=$(mktemp -d "/tmp/slamdata-bump.XXXXXXXX")
-      git clone --depth 1 https://$GITHUB_TOKEN@github.com/slamdata/devtools.git $clone_dir
-
-      for t in "$(scripts/listLabels | grep 'version: revision')"; do
-        $clone_dir/bin/sdmerge $TRAVIS_REPO_SLUG $TRAVIS_PULL_REQUEST
-      done
-    fi
-
+  - scripts/checkAndAutoMerge
   - scripts/discordTravisPost success https://discordapp.com/api/webhooks/$DISCORD_WEBHOOK_TOKENS
 
 after_failure:
-- scripts/discordTravisPost failure https://discordapp.com/api/webhooks/$DISCORD_WEBHOOK_TOKENS
+  - scripts/discordTravisPost failure https://discordapp.com/api/webhooks/$DISCORD_WEBHOOK_TOKENS
 
 branches:
   only:
-  - master
-  - /^backport.*$/
+    - master
+    - /^backport.*$/
 
 before_cache:
-- find "$HOME/.sbt/" -name '*.lock' -print0 | xargs -0 rm
-- find "$HOME/.ivy2/" -name 'ivydata-*.properties' -print0 | xargs -0 rm
+  - find "$HOME/.sbt/" -name '*.lock' -print0 | xargs -0 rm
+  - find "$HOME/.ivy2/" -name 'ivydata-*.properties' -print0 | xargs -0 rm
