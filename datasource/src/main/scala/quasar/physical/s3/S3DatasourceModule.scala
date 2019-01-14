@@ -74,14 +74,14 @@ object S3DatasourceModule extends LightweightDatasourceModule {
             case NotLive =>
               val msg = "Unable to ListObjects at the root of the bucket"
               DatasourceError
-                .accessDenied[Json, InitializationError[Json]](kind, config, msg)
+                .accessDenied[Json, InitializationError[Json]](kind, sanitizeConfig(config), msg)
                 .left
           }
         }
 
       case Left((msg, _)) =>
         DatasourceError
-          .invalidConfiguration[Json, InitializationError[Json]](kind, config, NonEmptyList(msg))
+          .invalidConfiguration[Json, InitializationError[Json]](kind, sanitizeConfig(config), NonEmptyList(msg))
           .left.pure[F]
     }
 
