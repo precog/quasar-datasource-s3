@@ -102,7 +102,7 @@ object S3DatasourceModule extends LightweightDatasourceModule {
       : F[Disposable[F, Client[F]]] = {
     val clientResource = BlazeClientBuilder[F](ec)
       .withIdleTimeout(Duration.Inf)
-      .allocate
+      .allocated
 
     val signingClient = clientResource.map(_.leftMap(AwsV4Signing(conf)))
 
