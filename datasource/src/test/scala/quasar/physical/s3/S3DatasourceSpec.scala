@@ -207,7 +207,7 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
       config: S3Config): F[DS[F]] = {
 
     val ec = ExecutionContext.Implicits.global
-    val builder = BlazeClientBuilder[F](ec).allocate
+    val builder = BlazeClientBuilder[F](ec).allocated
     // FIXME: eliminate inheritance from DatasourceSpec and sequence the resource instead of
     // ignoring clean up here.
     val client = builder.map(_._1)
