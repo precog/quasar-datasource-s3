@@ -23,6 +23,7 @@ import quasar.common.data.Data
 import quasar.connector._
 import quasar.contrib.scalaz.MonadError_
 import quasar.qscript.InterpretedRead
+import quasar.ScalarStages
 
 import java.nio.charset.Charset
 import scala.concurrent.ExecutionContext
@@ -42,7 +43,7 @@ import S3DatasourceSpec._
 class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
   import S3DatasourceModule.DS
 
-  def iRead[A](path: A): InterpretedRead[A] = InterpretedRead(path, List())
+  def iRead[A](path: A): InterpretedRead[A] = InterpretedRead(path, ScalarStages.Id)
 
   val testBucket = Uri.uri("https://s3.amazonaws.com/slamdata-public-test")
   val nonExistentPath =
@@ -179,7 +180,7 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
       path: ResourcePath,
       expected: Array[Byte]) =
     ds.evaluate(iRead(path)) flatMap {
-      case QueryResult.Typed(_, data, List()) =>
+      case QueryResult.Typed(_, data, ScalarStages.Id) =>
         data.compile.to[Array].map(_ must_=== expected)
 
       case _ =>
