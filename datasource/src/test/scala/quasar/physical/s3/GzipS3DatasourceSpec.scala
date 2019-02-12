@@ -21,6 +21,7 @@ import quasar.api.resource.ResourcePath
 import quasar.connector.{CompressionScheme, QueryResult}
 import quasar.physical.s3.SecureS3DatasourceSpec._
 import quasar.qscript.InterpretedRead
+import quasar.ScalarStages
 
 import cats.effect.IO
 import cats.syntax.flatMap._
@@ -36,8 +37,8 @@ final class GzipS3DatasourceSpec extends S3DatasourceSpec {
       ds: DS[IO],
       path: ResourcePath,
       expected: Array[Byte]) =
-    ds.evaluate(InterpretedRead(path, List())) flatMap {
-      case QueryResult.Compressed(CompressionScheme.Gzip, QueryResult.Typed(_, data, List())) =>
+    ds.evaluate(InterpretedRead(path, ScalarStages.Id)) flatMap {
+      case QueryResult.Compressed(CompressionScheme.Gzip, QueryResult.Typed(_, data, _)) =>
         // not worth checking the exact data here since it's still just transferring the exact byte stream
         // (as with non-gzipped configs)
         IO(ok)

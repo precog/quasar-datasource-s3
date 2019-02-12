@@ -61,7 +61,7 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
         }
 
         impl.evaluate[F](client, config.bucket, file) map { bytes =>
-          val qr = QueryResult.typed(ParsableType.json(jvar, false), bytes, iRead.instructions)
+          val qr = QueryResult.typed(ParsableType.json(jvar, false), bytes, iRead.stages)
           config.compressionScheme.fold(qr)(QueryResult.compressed(_, qr))
         }
     }
