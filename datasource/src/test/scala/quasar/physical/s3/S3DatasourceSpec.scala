@@ -41,7 +41,6 @@ import shims._
 import S3DatasourceSpec._
 
 class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
-  import S3DatasourceModule.DS
 
   def iRead[A](path: A): InterpretedRead[A] = InterpretedRead(path, ScalarStages.Id)
 

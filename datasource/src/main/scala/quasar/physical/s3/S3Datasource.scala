@@ -66,14 +66,14 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
         }
     }
 
-  def prefixedChildPaths(path: ResourcePath): F[Option[Stream[F, (ResourceName, ResourcePathType)]]] =
+  def prefixedChildPaths(path: ResourcePath): F[Option[Stream[F, (ResourceName, ResourcePathType.Physical)]]] =
     pathIsResource(path).ifM(
       Stream.empty
-        .covaryOutput[(ResourceName, ResourcePathType)]
+        .covaryOutput[(ResourceName, ResourcePathType.Physical)]
         .covary[F].some.pure[F], // FIXME: static guarantees from pathIsResource
       impl.children(client, config.bucket, path.toPath) map {
         case None =>
-          none[Stream[F, (ResourceName, ResourcePathType)]]
+          none[Stream[F, (ResourceName, ResourcePathType.Physical)]]
         case Some(paths) =>
           paths.map {
             case -\/(Path.DirName(dn)) => (ResourceName(dn), ResourcePathType.prefix)
