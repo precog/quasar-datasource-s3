@@ -20,7 +20,7 @@ import slamdata.Predef._
 
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.common.data.Data
-import quasar.connector._
+import quasar.connector._, LightweightDatasourceModule.DS
 import quasar.contrib.scalaz.MonadError_
 import quasar.qscript.InterpretedRead
 import quasar.ScalarStages

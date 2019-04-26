@@ -18,7 +18,7 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 import quasar.api.resource.ResourcePath
-import quasar.connector.{CompressionScheme, DS, QueryResult}
+import quasar.connector.{CompressionScheme, LightweightDatasourceModule, QueryResult}, LightweightDatasourceModule.DS
 import quasar.physical.s3.SecureS3DatasourceSpec._
 import quasar.qscript.InterpretedRead
 import quasar.ScalarStages
