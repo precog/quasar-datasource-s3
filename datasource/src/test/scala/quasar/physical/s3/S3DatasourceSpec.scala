@@ -40,7 +40,7 @@ import shims._
 
 import S3DatasourceSpec._
 
-class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
+class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathType.Physical] {
 
   def iRead[A](path: A): InterpretedRead[A] = InterpretedRead(path, ScalarStages.Id)
 
