@@ -33,7 +33,7 @@ final class ChildrenSpec extends Specification {
     implicit val cs = IO.contextShift(ExecutionContext.global)
     // Force S3 to return a single element per page in ListObjects,
     // to ensure pagination works correctly
-    val bucket = Uri.uri("https://s3.amazonaws.com/slamdata-public-test/").withQueryParam("max-keys", "1")
+    val bucket = Uri.uri("https://slamdata-public-test.s3.amazonaws.com").withQueryParam("max-keys", "1")
 
     val dir = Path.rootDir
     val client = BlazeClientBuilder[IO](ExecutionContext.global).resource

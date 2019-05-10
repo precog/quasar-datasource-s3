@@ -31,7 +31,7 @@ import shims._
 final class GzipS3DatasourceSpec extends S3DatasourceSpec {
   import S3DatasourceModule.DS
 
-  override val testBucket = Uri.uri("https://s3.amazonaws.com/slamdata-public-gzip-test")
+  override val testBucket = Uri.uri("https://slamdata-public-gzip-test.s3.amazonaws.com")
 
   override def assertResultBytes(
       ds: DS[IO],
