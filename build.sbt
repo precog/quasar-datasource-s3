@@ -24,7 +24,7 @@ val specsVersion = "4.1.2"
 
 lazy val core = project
   .in(file("datasource"))
-  .settings(addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.2.4"))
+  .settings(addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.0"))
   .settings(
     name := "quasar-datasource-s3",
 
