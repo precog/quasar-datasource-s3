@@ -39,7 +39,7 @@ class S3DatasourceModuleSpec extends Specification {
   "rejects invalid credentials" >> {
     // slamdata-private-test is a bucket that requires credentials to access
     val conf = Json.obj(
-      "bucket" -> Json.jString("https://s3.amazonaws.com/slamdata-private-test"),
+      "bucket" -> Json.jString("https://slamdata-private-test.s3.amazonaws.com"),
       "jsonParsing" -> Json.jString("array"))
 
     val ds = S3DatasourceModule.lightweightDatasource[IO](conf).unsafeRunSync.toEither

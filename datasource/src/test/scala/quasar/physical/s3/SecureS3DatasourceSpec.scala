@@ -36,7 +36,7 @@ import shims._
 import SecureS3DatasourceSpec._
 
 final class SecureS3DatasourceSpec extends S3DatasourceSpec {
-  override val testBucket = Uri.uri("https://s3.amazonaws.com/slamdata-private-test")
+  override val testBucket = Uri.uri("https://slamdata-private-test.s3.amazonaws.com")
 
   override val credentials: IO[Option[S3Credentials]] = {
     val read = IO {
