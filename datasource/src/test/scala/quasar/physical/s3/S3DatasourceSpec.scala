@@ -44,7 +44,7 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
 
   def iRead[A](path: A): InterpretedRead[A] = InterpretedRead(path, ScalarStages.Id)
 
-  val testBucket = Uri.uri("https://s3.amazonaws.com/slamdata-public-test")
+  val testBucket = Uri.uri("https://slamdata-public-test.s3.amazonaws.com")
   val nonExistentPath =
     ResourcePath.root() / ResourceName("does") / ResourceName("not") / ResourceName("exist")
 
