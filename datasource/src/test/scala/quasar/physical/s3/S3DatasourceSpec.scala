@@ -20,7 +20,7 @@ import slamdata.Predef._
 
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.common.data.Data
-import quasar.connector._
+import quasar.connector._, LightweightDatasourceModule.DS
 import quasar.contrib.scalaz.MonadError_
 import quasar.qscript.InterpretedRead
 import quasar.ScalarStages
@@ -40,8 +40,7 @@ import shims._
 
 import S3DatasourceSpec._
 
-class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
-  import S3DatasourceModule.DS
+class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathType.Physical] {
 
   def iRead[A](path: A): InterpretedRead[A] = InterpretedRead(path, ScalarStages.Id)
 

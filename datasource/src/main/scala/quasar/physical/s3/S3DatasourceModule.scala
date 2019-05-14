@@ -20,7 +20,7 @@ import slamdata.Predef.{Stream => _, _}
 import quasar.Disposable
 import quasar.api.datasource.{DatasourceError, DatasourceType}
 import quasar.api.datasource.DatasourceError.InitializationError
-import quasar.connector.{LightweightDatasourceModule, MonadResourceErr}
+import quasar.connector.{LightweightDatasourceModule, MonadResourceErr}, LightweightDatasourceModule.DS
 import quasar.physical.s3.S3Datasource.{Live, NotLive, Redirected}
 
 import scala.concurrent.duration.Duration
