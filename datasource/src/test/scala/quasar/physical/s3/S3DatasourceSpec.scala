@@ -65,6 +65,12 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?]] {
       datasource.pathIsResource(path).map(_ must beFalse)
     }
 
+    // this also tests request signing for secured buckets
+    "a non-existing file with special chars is not a resource" >>* {
+      val res = ResourcePath.root() / ResourceName("testData") / ResourceName("""-_.!~*'() /"\#$%^&<>,?[]+=:;`""")
+      datasource.pathIsResource(res) map (_ must beFalse)
+    }
+
     "an actual file is a resource" >>* {
       val res = ResourcePath.root() / ResourceName("testData") / ResourceName("array.json")
       datasource.pathIsResource(res) map (_ must beTrue)
