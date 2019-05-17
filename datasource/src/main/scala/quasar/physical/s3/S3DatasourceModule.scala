@@ -29,17 +29,13 @@ import scala.util.Either
 import argonaut.Json
 import argonaut.ArgonautScalaz._
 import cats.effect.{ConcurrentEffect, ContextShift, Resource, Timer}
-import cats.instances.tuple._
 import cats.syntax.applicative._
-import cats.syntax.bifunctor._
 import cats.syntax.either._
 import cats.syntax.eq._
-import cats.syntax.flatMap._
 import org.http4s.client.Client
 import org.http4s.client.blaze.BlazeClientBuilder
 import org.http4s.client.middleware.FollowRedirect
-import scalaz.{NonEmptyList, \/}
-import scalaz.syntax.either._
+import scalaz.NonEmptyList
 import scalaz.syntax.functor._
 import shims._
 
