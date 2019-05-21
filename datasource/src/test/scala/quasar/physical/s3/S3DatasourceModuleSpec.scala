@@ -42,11 +42,11 @@ class S3DatasourceModuleSpec extends Specification {
       "bucket" -> Json.jString("https://slamdata-private-test.s3.amazonaws.com"),
       "jsonParsing" -> Json.jString("array"))
 
-    val ds = S3DatasourceModule.lightweightDatasource[IO](conf).unsafeRunSync.toEither
-
-    ds must beLike {
-      case Left(AccessDenied(_, _, _)) => ok
-    }
+    S3DatasourceModule.lightweightDatasource[IO](conf)
+      .use(ds => IO(ds must beLike {
+        case Left(AccessDenied(_, _, _)) => ok
+      }))
+      .unsafeRunSync()
   }
 
   "rejects a non-bucket URI" >> {
@@ -54,11 +54,11 @@ class S3DatasourceModuleSpec extends Specification {
       "bucket" -> Json.jString("https://google.com"),
       "jsonParsing" -> Json.jString("array"))
 
-    val ds = S3DatasourceModule.lightweightDatasource[IO](conf).unsafeRunSync.toEither
-
-    ds must beLike {
-      case Left(AccessDenied(_, _, _)) => ok
-    }
+    S3DatasourceModule.lightweightDatasource[IO](conf)
+      .use(ds => IO(ds must beLike {
+        case Left(AccessDenied(_, _, _)) => ok
+      }))
+      .unsafeRunSync()
   }
 
   "sanitizeConfig" in {
