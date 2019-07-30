@@ -41,6 +41,7 @@ jobs:
         - set -e
         # Just protecting against automated scrapers
         - base64 -d testCredentials.json.b64 > testCredentials.json
+        - $SBT ++$TRAVIS_SCALA_VERSION datasourceAssemblePlugin
         - $SBT ++$TRAVIS_SCALA_VERSION test
 
     - stage: publish
