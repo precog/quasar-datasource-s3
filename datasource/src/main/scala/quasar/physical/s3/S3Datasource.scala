@@ -55,13 +55,8 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
         MonadError_[F, ResourceError].raiseError(ResourceError.notAResource(iRead.path))
 
       case Leaf(file) =>
-        val jvar = config.parsing match {
-          case S3JsonParsing.JsonArray => JsonVariant.ArrayWrapped
-          case S3JsonParsing.LineDelimited => JsonVariant.LineDelimited
-        }
-
         impl.evaluate[F](client, config.bucket, file) map { bytes =>
-          val qr = QueryResult.typed(ParsableType.json(jvar, false), bytes, iRead.stages)
+          val qr = QueryResult.typed(config.format, bytes, iRead.stages)
           config.compressionScheme.fold(qr)(QueryResult.compressed(_, qr))
         }
     }

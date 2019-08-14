@@ -18,7 +18,8 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 import quasar.api.resource.ResourcePath
-import quasar.connector.{CompressionScheme, LightweightDatasourceModule, QueryResult}, LightweightDatasourceModule.DS
+import quasar.connector.{CompressionScheme, LightweightDatasourceModule, QueryResult, ParsableType}
+import LightweightDatasourceModule.DS, ParsableType._
 import quasar.physical.s3.SecureS3DatasourceSpec._
 import quasar.qscript.InterpretedRead
 import quasar.ScalarStages
@@ -47,7 +48,15 @@ final class GzipS3DatasourceSpec extends S3DatasourceSpec {
     }
 
   override val datasourceLD =
-    run(credentials >>= (creds => mkDatasource[IO](S3Config(testBucket, S3JsonParsing.LineDelimited, Some(CompressionScheme.Gzip), creds))))
+    run(credentials >>= (creds => mkDatasource[IO](S3Config(
+      testBucket,
+      ParsableType.json(JsonVariant.LineDelimited, false),
+      Some(CompressionScheme.Gzip),
+      creds))))
   override val datasource =
-    run(credentials >>= (creds => mkDatasource[IO](S3Config(testBucket, S3JsonParsing.JsonArray, Some(CompressionScheme.Gzip), creds))))
+    run(credentials >>= (creds => mkDatasource[IO](S3Config(
+      testBucket,
+      ParsableType.json(JsonVariant.ArrayWrapped, false),
+      Some(CompressionScheme.Gzip),
+      creds))))
 }

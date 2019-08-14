@@ -17,17 +17,15 @@
 package quasar.physical.s3
 
 import slamdata.Predef._
-import quasar.connector.CompressionScheme
+import quasar.connector.{CompressionScheme, ParsableType}, ParsableType.JsonVariant
 
 import argonaut._ , Argonaut._
 import org.http4s.Uri
 import monocle.Prism
-import scalaz.syntax.show._
-import shims._
 
 final case class S3Config(
     bucket: Uri,
-    parsing: S3JsonParsing,
+    format: ParsableType,
     compressionScheme: Option[CompressionScheme],
     credentials: Option[S3Credentials])
 
@@ -38,12 +36,6 @@ final case class Region(name: String)
 final case class S3Credentials(accessKey: AccessKey, secretKey: SecretKey, region: Region)
 
 object S3Config {
-
-  private val parseStrings =
-    Map[String, S3JsonParsing](
-      "array" -> S3JsonParsing.JsonArray,
-      "lineDelimited" -> S3JsonParsing.LineDelimited)
-
   private val compressionSchemePrism: Prism[String, CompressionScheme] =
     Prism.partial[String, CompressionScheme] {
       case "gzip" => CompressionScheme.Gzip
@@ -59,22 +51,30 @@ object S3Config {
     u => Json.jString(u.renderString),
     optionDecoder(_.as[String].toOption.flatMap(Uri.fromString(_).toOption), "Uri").decode(_))
 
-  implicit val jsonParsingCodec: CodecJson[S3JsonParsing] = CodecJson[S3JsonParsing](
-    p => Json.jString(p.shows),
-    optionDecoder(_.as[String].toOption.flatMap(s => parseStrings.get(s)), "jsonParsing").decode
-  ).setName("Unrecognized jsonParsing field")
+
+  val legacyFormatDecode: DecodeJson[ParsableType] = DecodeJson(c => c.as[String].flatMap {
+    case "array" => DecodeResult.ok(ParsableType.json(JsonVariant.ArrayWrapped, false))
+    case "lineDelimited" => DecodeResult.ok(ParsableType.json(JsonVariant.LineDelimited, false))
+    case _ => DecodeResult.fail("Unrecognized S3JsonParsing field", c.history)
+  })
 
   implicit val compressionSchemeCodec: CodecJson[CompressionScheme] = CodecJson[CompressionScheme](
     { cs => Json.jString(compressionSchemePrism(cs)) },
     { optionDecoder(_.as[String].toOption.flatMap(s => compressionSchemePrism.getOption(s)), "compressionScheme").decode }
   ).setName("Unrecognized compression scheme")
 
-  implicit val configCodec: CodecJson[S3Config] =
-    casecodec4(
-      S3Config.apply, S3Config.unapply)(
-      "bucket", "jsonParsing", "compressionScheme", "credentials")
-      .setName(failureMsg)
-
+  implicit val configCodec: CodecJson[S3Config] = CodecJson({ (config: S3Config) =>
+    ("bucket" := config.bucket) ->:
+    ("format" := config.format) ->:
+    ("compressionScheme" := config.compressionScheme) ->:
+    ("credentials" := config.credentials) ->:
+    jEmptyObject
+  }, (c => for {
+    bucket <- (c --\ "bucket").as[Uri]
+    format <- (c --\ "format").as[ParsableType] ||| (c --\ "jsonParsing").as(legacyFormatDecode)
+    compressionScheme <- (c --\ "compressionScheme").as[Option[CompressionScheme]]
+    credentials <- (c --\ "credentials").as[Option[S3Credentials]]
+  } yield S3Config(bucket, format, compressionScheme, credentials))).setName(failureMsg)
 }
 
 object S3Credentials {

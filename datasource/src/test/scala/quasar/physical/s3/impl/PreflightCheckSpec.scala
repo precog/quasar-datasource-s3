@@ -18,6 +18,8 @@ package quasar.physical.s3
 
 import slamdata.Predef.None
 
+import quasar.connector.ParsableType, ParsableType._
+
 import scala.concurrent.ExecutionContext
 
 import cats.effect.IO
@@ -60,7 +62,7 @@ final class PreflightCheckSpec extends Specification {
   }.orNotFound
 
   val client = Client.fromHttpApp(app)
-  val config = S3Config(Uri.uri("http://localhost/bucket1"), S3JsonParsing.LineDelimited, None, None)
+  val config = S3Config(Uri.uri("http://localhost/bucket1"), ParsableType.json(JsonVariant.LineDelimited, false), None, None)
 
   "updates bucket URI for permanent redirects" >> {
     val uri = Uri.uri("http://localhost/bucket2/")

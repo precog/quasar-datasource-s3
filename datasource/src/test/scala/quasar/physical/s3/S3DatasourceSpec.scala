@@ -18,9 +18,11 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 
+import tectonic.csv.Parser.{Config => CSVConfig}
+
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.common.data.Data
-import quasar.connector._, LightweightDatasourceModule.DS
+import quasar.connector._, LightweightDatasourceModule.DS, ParsableType._
 import quasar.contrib.scalaz.MonadError_
 import quasar.qscript.InterpretedRead
 import quasar.ScalarStages
@@ -151,6 +153,14 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
         "[[1, 2], [3, 4]]\n".getBytes(Charset.forName("UTF-8")))
     }
 
+//    "read CSV" >>* {
+//      val expected = "0,1\r\na,b\r\n"
+//      assertResultBytes(
+//        datasourceCSV,
+//        ResourcePath.root() / ResourceName("testData") / ResourceName("test.csv"),
+//        expected.getBytes(Charset.forName("UTF-8")))
+//    }
+
     "read array JSON of resource with special chars in path" >>* {
       assertResultBytes(
         datasource,
@@ -169,7 +179,7 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
 
     "reading a non-existent file raises ResourceError.PathNotFound" >> {
       val creds = EitherT.right[Throwable](credentials)
-      val ds = creds.flatMap(c => mkDatasource[G](S3Config(testBucket, S3JsonParsing.JsonArray, None, c)))
+      val ds = creds.flatMap(c => mkDatasource[G](S3Config(testBucket, ParsableType.json(JsonVariant.ArrayWrapped, false), None, c)))
 
       val path = ResourcePath.root() / ResourceName("does-not-exist")
       val read: G[QueryResult[G]] = ds.flatMap(_.evaluate(iRead(path)))
@@ -222,8 +232,9 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
     signingClient map (new S3Datasource[F](_, config))
   }
 
-  val datasourceLD = run(mkDatasource[IO](S3Config(testBucket, S3JsonParsing.LineDelimited, None, None)))
-  val datasource = run(mkDatasource[IO](S3Config(testBucket, S3JsonParsing.JsonArray, None, None)))
+  val datasourceLD = run(mkDatasource[IO](S3Config(testBucket, ParsableType.json(JsonVariant.LineDelimited, false), None, None)))
+  val datasource = run(mkDatasource[IO](S3Config(testBucket, ParsableType.json(JsonVariant.ArrayWrapped, false), None, None)))
+  val datasourceCSV = run(mkDatasource[IO](S3Config(testBucket, ParsableType.separatedValues(CSVConfig()), None, None)))
 }
 
 object S3DatasourceSpec {
