@@ -50,8 +50,6 @@ object S3Config {
   }, (c => for {
     format <- c.as[DataFormat]
     bucket <- (c --\ "bucket").as[Uri]
-//    format <- (c --\ "format").as[ParsableType] ||| (c --\ "jsonParsing").as(legacyFormatDecode)
-//    compressionScheme <- (c --\ "compressionScheme").as[Option[CompressionScheme]]
     credentials <- (c --\ "credentials").as[Option[S3Credentials]]
   } yield S3Config(bucket, format, credentials))).setName(failureMsg)
 }
