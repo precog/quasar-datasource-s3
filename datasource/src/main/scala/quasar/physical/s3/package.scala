@@ -20,7 +20,6 @@ import slamdata.Predef._
 
 import quasar.api.datasource.DatasourceType
 
-import cats.Show
 import eu.timepit.refined.auto._
 
 sealed trait S3Error

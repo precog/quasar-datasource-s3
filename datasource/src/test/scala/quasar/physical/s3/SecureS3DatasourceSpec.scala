@@ -18,7 +18,7 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 
-import quasar.connector.{ResourceError, ParsableType}, ParsableType._
+import quasar.connector.{ResourceError, DataFormat}
 import quasar.contrib.scalaz.MonadError_
 
 import scala.io.{Source, Codec}
@@ -66,14 +66,12 @@ final class SecureS3DatasourceSpec extends S3DatasourceSpec {
   override val datasourceLD =
     run(credentials >>= (creds => mkDatasource[IO](S3Config(
       testBucket,
-      ParsableType.json(JsonVariant.LineDelimited, false),
-      None,
+      DataFormat.json,
       creds))))
   override val datasource =
     run(credentials >>= (creds => mkDatasource[IO](S3Config(
       testBucket,
-      ParsableType.json(JsonVariant.ArrayWrapped, false),
-      None,
+      DataFormat.json,
       creds))))
 }
 

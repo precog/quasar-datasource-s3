@@ -22,7 +22,7 @@ import tectonic.csv.Parser.{Config => CSVConfig}
 
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.common.data.Data
-import quasar.connector._, LightweightDatasourceModule.DS, ParsableType._
+import quasar.connector._, LightweightDatasourceModule.DS
 import quasar.contrib.scalaz.MonadError_
 import quasar.qscript.InterpretedRead
 import quasar.ScalarStages
@@ -179,7 +179,7 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
 
     "reading a non-existent file raises ResourceError.PathNotFound" >> {
       val creds = EitherT.right[Throwable](credentials)
-      val ds = creds.flatMap(c => mkDatasource[G](S3Config(testBucket, ParsableType.json(JsonVariant.ArrayWrapped, false), None, c)))
+      val ds = creds.flatMap(c => mkDatasource[G](S3Config(testBucket, DataFormat.json, c)))
 
       val path = ResourcePath.root() / ResourceName("does-not-exist")
       val read: G[QueryResult[G]] = ds.flatMap(_.evaluate(iRead(path)))
@@ -232,9 +232,9 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
     signingClient map (new S3Datasource[F](_, config))
   }
 
-  val datasourceLD = run(mkDatasource[IO](S3Config(testBucket, ParsableType.json(JsonVariant.LineDelimited, false), None, None)))
-  val datasource = run(mkDatasource[IO](S3Config(testBucket, ParsableType.json(JsonVariant.ArrayWrapped, false), None, None)))
-  val datasourceCSV = run(mkDatasource[IO](S3Config(testBucket, ParsableType.separatedValues(CSVConfig()), None, None)))
+  val datasourceLD = run(mkDatasource[IO](S3Config(testBucket, DataFormat.json, None)))
+  val datasource = run(mkDatasource[IO](S3Config(testBucket, DataFormat.json, None)))
+  val datasourceCSV = run(mkDatasource[IO](S3Config(testBucket, DataFormat.SeparatedValues(CSVConfig()), None)))
 }
 
 object S3DatasourceSpec {

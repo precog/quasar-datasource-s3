@@ -17,16 +17,14 @@
 package quasar.physical.s3
 
 import slamdata.Predef._
-import quasar.connector.{CompressionScheme, ParsableType}, ParsableType.JsonVariant
+import quasar.connector.DataFormat
 
 import argonaut._ , Argonaut._
 import org.http4s.Uri
-import monocle.Prism
 
 final case class S3Config(
     bucket: Uri,
-    format: ParsableType,
-    compressionScheme: Option[CompressionScheme],
+    format: DataFormat,
     credentials: Option[S3Credentials])
 
 final case class AccessKey(value: String)
@@ -36,13 +34,6 @@ final case class Region(name: String)
 final case class S3Credentials(accessKey: AccessKey, secretKey: SecretKey, region: Region)
 
 object S3Config {
-  private val compressionSchemePrism: Prism[String, CompressionScheme] =
-    Prism.partial[String, CompressionScheme] {
-      case "gzip" => CompressionScheme.Gzip
-    } {
-      case CompressionScheme.Gzip  => "gzip"
-    }
-
   private val failureMsg =
     "Failed to parse configuration for S3 connector."
 
@@ -52,29 +43,17 @@ object S3Config {
     optionDecoder(_.as[String].toOption.flatMap(Uri.fromString(_).toOption), "Uri").decode(_))
 
 
-  val legacyFormatDecode: DecodeJson[ParsableType] = DecodeJson(c => c.as[String].flatMap {
-    case "array" => DecodeResult.ok(ParsableType.json(JsonVariant.ArrayWrapped, false))
-    case "lineDelimited" => DecodeResult.ok(ParsableType.json(JsonVariant.LineDelimited, false))
-    case _ => DecodeResult.fail("Unrecognized S3JsonParsing field", c.history)
-  })
-
-  implicit val compressionSchemeCodec: CodecJson[CompressionScheme] = CodecJson[CompressionScheme](
-    { cs => Json.jString(compressionSchemePrism(cs)) },
-    { optionDecoder(_.as[String].toOption.flatMap(s => compressionSchemePrism.getOption(s)), "compressionScheme").decode }
-  ).setName("Unrecognized compression scheme")
-
   implicit val configCodec: CodecJson[S3Config] = CodecJson({ (config: S3Config) =>
     ("bucket" := config.bucket) ->:
-    ("format" := config.format) ->:
-    ("compressionScheme" := config.compressionScheme) ->:
     ("credentials" := config.credentials) ->:
-    jEmptyObject
+    config.format.asJson
   }, (c => for {
+    format <- c.as[DataFormat]
     bucket <- (c --\ "bucket").as[Uri]
-    format <- (c --\ "format").as[ParsableType] ||| (c --\ "jsonParsing").as(legacyFormatDecode)
-    compressionScheme <- (c --\ "compressionScheme").as[Option[CompressionScheme]]
+//    format <- (c --\ "format").as[ParsableType] ||| (c --\ "jsonParsing").as(legacyFormatDecode)
+//    compressionScheme <- (c --\ "compressionScheme").as[Option[CompressionScheme]]
     credentials <- (c --\ "credentials").as[Option[S3Credentials]]
-  } yield S3Config(bucket, format, compressionScheme, credentials))).setName(failureMsg)
+  } yield S3Config(bucket, format, credentials))).setName(failureMsg)
 }
 
 object S3Credentials {

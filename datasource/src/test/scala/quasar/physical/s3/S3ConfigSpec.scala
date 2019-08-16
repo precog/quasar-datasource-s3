@@ -17,7 +17,7 @@
 package quasar.physical.s3
 
 import slamdata.Predef._
-import quasar.connector.ParsableType, ParsableType._
+import quasar.connector.DataFormat, DataFormat._
 
 import org.specs2.mutable.Specification
 import argonaut.{Json, DecodeJson}
@@ -64,7 +64,7 @@ class S3ConfigSpec extends Specification {
           "type" -> Json.jString("json"),
           "precise" -> Json.jBool(true),
           "variant" -> Json.jString("line-delimited")))
-      decode(conf).toEither must beRight((c: S3Config) => c.format === ParsableType.json(JsonVariant.ArrayWrapped, true))
+      decode(conf).toEither must beRight((c: S3Config) => c.format === DataFormat.precise(DataFormat.ldjson))
     }
   }
 }
