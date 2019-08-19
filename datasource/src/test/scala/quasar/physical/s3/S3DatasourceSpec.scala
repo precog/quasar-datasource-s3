@@ -18,8 +18,6 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 
-import tectonic.csv.Parser.{Config => CSVConfig}
-
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.common.data.Data
 import quasar.connector._, LightweightDatasourceModule.DS
@@ -234,7 +232,7 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
 
   val datasourceLD = run(mkDatasource[IO](S3Config(testBucket, DataFormat.json, None)))
   val datasource = run(mkDatasource[IO](S3Config(testBucket, DataFormat.json, None)))
-  val datasourceCSV = run(mkDatasource[IO](S3Config(testBucket, DataFormat.SeparatedValues(CSVConfig()), None)))
+  val datasourceCSV = run(mkDatasource[IO](S3Config(testBucket, DataFormat.SeparatedValues.Default, None)))
 }
 
 object S3DatasourceSpec {

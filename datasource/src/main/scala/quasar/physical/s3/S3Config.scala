@@ -17,7 +17,7 @@
 package quasar.physical.s3
 
 import slamdata.Predef._
-import quasar.connector.DataFormat
+import quasar.connector.{CompressionScheme, DataFormat}
 
 import argonaut._ , Argonaut._
 import org.http4s.Uri
@@ -42,13 +42,27 @@ object S3Config {
     u => Json.jString(u.renderString),
     optionDecoder(_.as[String].toOption.flatMap(Uri.fromString(_).toOption), "Uri").decode(_))
 
+  val legacyDecodeFlatFormat: DecodeJson[DataFormat] = DecodeJson { c => c.as[String].flatMap {
+    case "array" => DecodeResult.ok(DataFormat.json)
+    case "lineDelimited" => DecodeResult.ok(DataFormat.ldjson)
+    case other => DecodeResult.fail(s"Unrecognized parsing format: $other", c.history)
+  }}
+
+  val legacyDecodeDataFormat: DecodeJson[DataFormat] = DecodeJson( c => for {
+    parsing <- (c --\ "jsonParsing").as(legacyDecodeFlatFormat)
+    compressionScheme <- (c --\ "compressionScheme").as[Option[CompressionScheme]]
+  } yield compressionScheme match {
+    case None => parsing
+    case Some(_) => DataFormat.compressed(parsing)
+  })
 
   implicit val configCodec: CodecJson[S3Config] = CodecJson({ (config: S3Config) =>
     ("bucket" := config.bucket) ->:
     ("credentials" := config.credentials) ->:
     config.format.asJson
   }, (c => for {
-    format <- c.as[DataFormat]
+    format <- c.as[DataFormat] ||| c.as(legacyDecodeDataFormat)
+
     bucket <- (c --\ "bucket").as[Uri]
     credentials <- (c --\ "credentials").as[Option[S3Credentials]]
   } yield S3Config(bucket, format, credentials))).setName(failureMsg)
