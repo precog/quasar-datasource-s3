@@ -47,7 +47,7 @@ object isResource {
     val request = Request[F]()
       .withUri(queryUri)
       .withMethod(Method.HEAD)
-      .withHeaders(Headers(Range(0, 1)))
+      .withHeaders(Headers.of(Range(0, 1)))
 
     if (Path.identicalPath(Path.rootDir, file)) {
       false.pure[F]

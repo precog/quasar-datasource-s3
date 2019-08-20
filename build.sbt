@@ -15,12 +15,12 @@ lazy val root = project
 
 val quasarVersion = IO.read(file("./quasar-version")).trim
 
-val http4sVersion = "0.20.0-M5"
+val http4sVersion = "0.20.10"
 val scalaXmlVersion = "1.1.0"
 
-val catsEffectVersion = "1.1.0"
+val catsEffectVersion = "1.3.1"
 val shimsVersion = "1.7.0"
-val specsVersion = "4.1.2"
+val specsVersion = "4.6.0"
 
 lazy val core = project
   .in(file("datasource"))
