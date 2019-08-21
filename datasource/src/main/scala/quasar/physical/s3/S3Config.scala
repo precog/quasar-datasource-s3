@@ -53,7 +53,7 @@ object S3Config {
     compressionScheme <- (c --\ "compressionScheme").as[Option[CompressionScheme]]
   } yield compressionScheme match {
     case None => parsing
-    case Some(_) => DataFormat.compressed(parsing)
+    case Some(_) => DataFormat.gzipped(parsing)
   })
 
   implicit val configCodec: CodecJson[S3Config] = CodecJson({ (config: S3Config) =>

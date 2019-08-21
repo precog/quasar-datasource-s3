@@ -50,11 +50,11 @@ final class GzipS3DatasourceSpec extends S3DatasourceSpec {
   override val datasourceLD =
     run(credentials >>= (creds => mkDatasource[IO](S3Config(
       testBucket,
-      DataFormat.compressed(DataFormat.ldjson),
+      DataFormat.gzipped(DataFormat.ldjson),
       creds))))
   override val datasource =
     run(credentials >>= (creds => mkDatasource[IO](S3Config(
       testBucket,
-      DataFormat.compressed(DataFormat.json),
+      DataFormat.gzipped(DataFormat.json),
       creds))))
 }
