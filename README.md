@@ -38,8 +38,7 @@ The configuration of the S3 datasource has the following JSON format
 ```
 
 * `bucket` the URL of the S3 bucket to use, e.g. `https://yourbucket.s3.amazonaws.com`
-* `jsonParsing` the format of the resources that are assumed to be in the container. Currently array-wrapped
-  (`"array"`) and line-delimited (`"lineDelimited"`) are supported.
+* `format` the format of the resource referred to by `url`. CSV/TSV, array wrapped json and line delimited jsons are supported
 * `compressionScheme` (optional, default = empty) compression scheme that the resources in the container are assumed
   to be compressed with. Currrently gzip (`"gzip"`) is supported.
   If omitted, the resources are not assumed to be compressed.
@@ -53,6 +52,7 @@ Example:
 ```
 {
   "bucket": "https://yourbucket.s3.amazonaws.com",
+  "format": {"type": "json", "variant": "line-delimited", "precise": false},
   "jsonParsing": "array",
   "compressionScheme": "gzip",
   "credentials": {
