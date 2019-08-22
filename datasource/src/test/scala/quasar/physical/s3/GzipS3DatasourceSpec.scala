@@ -57,4 +57,9 @@ final class GzipS3DatasourceSpec extends S3DatasourceSpec {
       testBucket,
       DataFormat.gzipped(DataFormat.json),
       creds))))
+  override val datasourceCSV =
+    run(credentials >>= (creds => mkDatasource[IO](S3Config(
+      testBucket,
+      DataFormat.gzipped(DataFormat.SeparatedValues.Default),
+      creds))))
 }

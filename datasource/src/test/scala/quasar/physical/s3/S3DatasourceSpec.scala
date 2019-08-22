@@ -119,6 +119,7 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
           ResourceName("a b") -> ResourcePathType.prefix,
           ResourceName("array.json") -> ResourcePathType.leafResource,
           ResourceName("lines.json") -> ResourcePathType.leafResource,
+          ResourceName("test.csv") -> ResourcePathType.leafResource,
           ResourceName("á") -> ResourcePathType.prefix))
     }
 
@@ -151,13 +152,13 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
         "[[1, 2], [3, 4]]\n".getBytes(Charset.forName("UTF-8")))
     }
 
-//    "read CSV" >>* {
-//      val expected = "0,1\r\na,b\r\n"
-//      assertResultBytes(
-//        datasourceCSV,
-//        ResourcePath.root() / ResourceName("testData") / ResourceName("test.csv"),
-//        expected.getBytes(Charset.forName("UTF-8")))
-//    }
+    "read CSV" >>* {
+      val expected = "foo,bar\r\n1,2"
+      assertResultBytes(
+        datasourceCSV,
+        ResourcePath.root() / ResourceName("testData") / ResourceName("test.csv"),
+        expected.getBytes(Charset.forName("UTF-8")))
+    }
 
     "read array JSON of resource with special chars in path" >>* {
       assertResultBytes(
