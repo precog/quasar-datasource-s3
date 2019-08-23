@@ -20,7 +20,6 @@ import slamdata.Predef._
 
 import quasar.api.datasource.DatasourceType
 
-import cats.Show
 import eu.timepit.refined.auto._
 
 sealed trait S3Error
@@ -30,19 +29,6 @@ object S3Error {
   final case class UnexpectedResponse(msg: String) extends S3Error
   final case object Forbidden extends S3Error
   final case object MalformedResponse extends S3Error
-}
-
-sealed trait S3JsonParsing
-
-object S3JsonParsing {
-  case object JsonArray extends S3JsonParsing
-  case object LineDelimited extends S3JsonParsing
-
-  implicit def showS3JsonParsing: Show[S3JsonParsing] =
-    Show.show {
-      case JsonArray => "array"
-      case LineDelimited => "lineDelimited"
-    }
 }
 
 package object s3 {

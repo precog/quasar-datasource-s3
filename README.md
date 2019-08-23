@@ -15,21 +15,36 @@ The configuration of the S3 datasource has the following JSON format
 ```
 {
   "bucket": String,
-  "jsonParsing": "array" | "lineDelimited",
+  "format": {
+    "type": "json" | "separated-values"
+    // for "json"
+    "precise": Boolean,
+    "variant" "array-wrapped" | "line-delimited"
+    // for "separated-values", all strings must be one symbol length
+    "header": Boolean,
+    // The first char of row break
+    "row1": String,
+    // The second char of row break, empty string if row break has only one symbol
+    "row2": String,
+    // Column separator (char)
+    "record": String,
+    "openQuote": String,
+    "closeQuote": String,
+    "escape": String
+  },
   ["compressionScheme": "gzip",]
   ["credentials": Object]
 }
 ```
 
 * `bucket` the URL of the S3 bucket to use, e.g. `https://yourbucket.s3.amazonaws.com`
-* `jsonParsing` the format of the resources that are assumed to be in the container. Currently array-wrapped 
-  (`"array"`) and line-delimited (`"lineDelimited"`) are supported.
-* `compressionScheme` (optional, default = empty) compression scheme that the resources in the container are assumed 
+* `format` the format of the resource referred to by `url`. CSV/TSV, array wrapped json and line delimited jsons are supported
+* `compressionScheme` (optional, default = empty) compression scheme that the resources in the container are assumed
   to be compressed with. Currrently gzip (`"gzip"`) is supported.
   If omitted, the resources are not assumed to be compressed.
-* `credentials` (optional, default = empty) S3 credentials to use for access in case the bucket is not public. 
+* `credentials` (optional, default = empty) S3 credentials to use for access in case the bucket is not public.
   Object has the following format: `{ "accessKey": String, "secretKey": String, "region": String }`.
-  The `credentials` section can be omitted completely for public buckets, but for private buckets the section needs 
+  The `credentials` section can be omitted completely for public buckets, but for private buckets the section needs
   to be there with all 3 fields specified.
 
 Example:
@@ -37,6 +52,7 @@ Example:
 ```
 {
   "bucket": "https://yourbucket.s3.amazonaws.com",
+  "format": {"type": "json", "variant": "line-delimited", "precise": false},
   "jsonParsing": "array",
   "compressionScheme": "gzip",
   "credentials": {

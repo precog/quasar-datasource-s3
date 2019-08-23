@@ -19,7 +19,7 @@ package quasar.physical.s3
 import quasar.api.datasource.DatasourceType
 import quasar.api.resource.ResourcePath.{Leaf, Root}
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
-import quasar.connector.{MonadResourceErr, ParsableType, QueryResult, ResourceError}
+import quasar.connector.{MonadResourceErr, QueryResult, ResourceError}
 import quasar.connector.datasource.LightweightDatasource
 import quasar.contrib.scalaz.MonadError_
 import quasar.qscript.InterpretedRead
@@ -44,7 +44,6 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
     config: S3Config)
     extends LightweightDatasource[F, Stream[F, ?], QueryResult[F]] {
 
-  import ParsableType.JsonVariant
   import S3Datasource._
 
   def kind: DatasourceType = s3.datasourceKind
@@ -55,14 +54,8 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
         MonadError_[F, ResourceError].raiseError(ResourceError.notAResource(iRead.path))
 
       case Leaf(file) =>
-        val jvar = config.parsing match {
-          case S3JsonParsing.JsonArray => JsonVariant.ArrayWrapped
-          case S3JsonParsing.LineDelimited => JsonVariant.LineDelimited
-        }
-
         impl.evaluate[F](client, config.bucket, file) map { bytes =>
-          val qr = QueryResult.typed(ParsableType.json(jvar, false), bytes, iRead.stages)
-          config.compressionScheme.fold(qr)(QueryResult.compressed(_, qr))
+          QueryResult.typed(config.format, bytes, iRead.stages)
         }
     }
 

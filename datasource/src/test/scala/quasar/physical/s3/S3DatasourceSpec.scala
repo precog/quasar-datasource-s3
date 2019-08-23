@@ -119,6 +119,7 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
           ResourceName("a b") -> ResourcePathType.prefix,
           ResourceName("array.json") -> ResourcePathType.leafResource,
           ResourceName("lines.json") -> ResourcePathType.leafResource,
+          ResourceName("test.csv") -> ResourcePathType.leafResource,
           ResourceName("á") -> ResourcePathType.prefix))
     }
 
@@ -151,6 +152,14 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
         "[[1, 2], [3, 4]]\n".getBytes(Charset.forName("UTF-8")))
     }
 
+    "read CSV" >>* {
+      val expected = "foo,bar\r\n1,2"
+      assertResultBytes(
+        datasourceCSV,
+        ResourcePath.root() / ResourceName("testData") / ResourceName("test.csv"),
+        expected.getBytes(Charset.forName("UTF-8")))
+    }
+
     "read array JSON of resource with special chars in path" >>* {
       assertResultBytes(
         datasource,
@@ -169,7 +178,7 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
 
     "reading a non-existent file raises ResourceError.PathNotFound" >> {
       val creds = EitherT.right[Throwable](credentials)
-      val ds = creds.flatMap(c => mkDatasource[G](S3Config(testBucket, S3JsonParsing.JsonArray, None, c)))
+      val ds = creds.flatMap(c => mkDatasource[G](S3Config(testBucket, DataFormat.json, c)))
 
       val path = ResourcePath.root() / ResourceName("does-not-exist")
       val read: G[QueryResult[G]] = ds.flatMap(_.evaluate(iRead(path)))
@@ -222,8 +231,9 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
     signingClient map (new S3Datasource[F](_, config))
   }
 
-  val datasourceLD = run(mkDatasource[IO](S3Config(testBucket, S3JsonParsing.LineDelimited, None, None)))
-  val datasource = run(mkDatasource[IO](S3Config(testBucket, S3JsonParsing.JsonArray, None, None)))
+  val datasourceLD = run(mkDatasource[IO](S3Config(testBucket, DataFormat.json, None)))
+  val datasource = run(mkDatasource[IO](S3Config(testBucket, DataFormat.json, None)))
+  val datasourceCSV = run(mkDatasource[IO](S3Config(testBucket, DataFormat.SeparatedValues.Default, None)))
 }
 
 object S3DatasourceSpec {

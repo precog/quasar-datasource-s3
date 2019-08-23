@@ -73,7 +73,10 @@ class S3DatasourceModuleSpec extends Specification {
 
       val redactedConf = Json.obj(
         "bucket" -> Json.jString("https://some.bucket.uri"),
-        "jsonParsing" -> Json.jString("array"),
+        "format" -> Json.obj(
+          "type" -> Json.jString("json"),
+          "variant" -> Json.jString("array-wrapped"),
+          "precise" -> Json.jBool(false)),
         "credentials" -> Json.obj(
           "accessKey" -> Json.jString("<REDACTED>"),
           "secretKey" -> Json.jString("<REDACTED>"),
