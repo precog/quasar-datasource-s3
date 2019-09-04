@@ -30,11 +30,12 @@ import argonaut.{Json, Argonaut}, Argonaut._
 import cats.effect.{ConcurrentEffect, ContextShift, Resource, Timer}
 import cats.syntax.applicative._
 import cats.syntax.either._
+import cats.syntax.functor._
+import cats.instances.option._
 import org.http4s.client.Client
 import org.http4s.client.blaze.BlazeClientBuilder
 import org.http4s.client.middleware.FollowRedirect
 import scalaz.NonEmptyList
-import scalaz.syntax.functor._
 import shims._
 
 object S3DatasourceModule extends LightweightDatasourceModule {
@@ -79,11 +80,10 @@ object S3DatasourceModule extends LightweightDatasourceModule {
     }
 
   override def sanitizeConfig(config: Json): Json = config.as[S3Config].result match {
-    case Left(_) => config
-    case Right(cfg) => cfg.credentials match {
-      case Some(_) => cfg.copy(credentials = Some(RedactedCreds)).asJson
-      case None => config
-    }
+    case Left(_) =>
+      config
+    case Right(cfg) =>
+      cfg.copy(credentials = cfg.credentials as RedactedCreds).asJson
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.ImplicitParameter"))
