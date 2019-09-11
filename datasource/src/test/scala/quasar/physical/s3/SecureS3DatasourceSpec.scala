@@ -18,7 +18,7 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 
-import quasar.connector.ResourceError
+import quasar.connector.{ResourceError, DataFormat}
 import quasar.contrib.scalaz.MonadError_
 
 import scala.io.{Source, Codec}
@@ -64,9 +64,20 @@ final class SecureS3DatasourceSpec extends S3DatasourceSpec {
   private val credsFile = "testCredentials.json"
 
   override val datasourceLD =
-    run(credentials >>= (creds => mkDatasource[IO](S3Config(testBucket, S3JsonParsing.LineDelimited, None, creds))))
+    run(credentials >>= (creds => mkDatasource[IO](S3Config(
+      testBucket,
+      DataFormat.json,
+      creds))))
   override val datasource =
-    run(credentials >>= (creds => mkDatasource[IO](S3Config(testBucket, S3JsonParsing.JsonArray, None, creds))))
+    run(credentials >>= (creds => mkDatasource[IO](S3Config(
+      testBucket,
+      DataFormat.json,
+      creds))))
+  override val datasourceCSV =
+    run(credentials >>= (creds => mkDatasource[IO](S3Config(
+      testBucket,
+      DataFormat.json,
+      creds))))
 }
 
 object SecureS3DatasourceSpec {

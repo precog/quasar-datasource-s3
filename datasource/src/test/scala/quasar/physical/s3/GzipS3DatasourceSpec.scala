@@ -18,7 +18,8 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 import quasar.api.resource.ResourcePath
-import quasar.connector.{CompressionScheme, LightweightDatasourceModule, QueryResult}, LightweightDatasourceModule.DS
+import quasar.connector.{CompressionScheme, LightweightDatasourceModule, QueryResult, DataFormat}
+import LightweightDatasourceModule.DS
 import quasar.physical.s3.SecureS3DatasourceSpec._
 import quasar.qscript.InterpretedRead
 import quasar.ScalarStages
@@ -37,7 +38,7 @@ final class GzipS3DatasourceSpec extends S3DatasourceSpec {
       path: ResourcePath,
       expected: Array[Byte]) =
     ds.evaluate(InterpretedRead(path, ScalarStages.Id)) flatMap {
-      case QueryResult.Compressed(CompressionScheme.Gzip, QueryResult.Typed(_, data, _)) =>
+      case QueryResult.Typed(DataFormat.Compressed(CompressionScheme.Gzip, _), data, _) =>
         // not worth checking the exact data here since it's still just transferring the exact byte stream
         // (as with non-gzipped configs)
         IO(ok)
@@ -47,7 +48,18 @@ final class GzipS3DatasourceSpec extends S3DatasourceSpec {
     }
 
   override val datasourceLD =
-    run(credentials >>= (creds => mkDatasource[IO](S3Config(testBucket, S3JsonParsing.LineDelimited, Some(CompressionScheme.Gzip), creds))))
+    run(credentials >>= (creds => mkDatasource[IO](S3Config(
+      testBucket,
+      DataFormat.gzipped(DataFormat.ldjson),
+      creds))))
   override val datasource =
-    run(credentials >>= (creds => mkDatasource[IO](S3Config(testBucket, S3JsonParsing.JsonArray, Some(CompressionScheme.Gzip), creds))))
+    run(credentials >>= (creds => mkDatasource[IO](S3Config(
+      testBucket,
+      DataFormat.gzipped(DataFormat.json),
+      creds))))
+  override val datasourceCSV =
+    run(credentials >>= (creds => mkDatasource[IO](S3Config(
+      testBucket,
+      DataFormat.gzipped(DataFormat.SeparatedValues.Default),
+      creds))))
 }

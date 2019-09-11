@@ -73,7 +73,10 @@ class S3DatasourceModuleSpec extends Specification {
 
       val redactedConf = Json.obj(
         "bucket" -> Json.jString("https://some.bucket.uri"),
-        "jsonParsing" -> Json.jString("array"),
+        "format" -> Json.obj(
+          "type" -> Json.jString("json"),
+          "variant" -> Json.jString("array-wrapped"),
+          "precise" -> Json.jBool(false)),
         "credentials" -> Json.obj(
           "accessKey" -> Json.jString("<REDACTED>"),
           "secretKey" -> Json.jString("<REDACTED>"),
@@ -82,12 +85,20 @@ class S3DatasourceModuleSpec extends Specification {
       S3DatasourceModule.sanitizeConfig(conf) must_== redactedConf
     }
 
-    "does nothing when there are no credentials to redact" >> {
+    "only migrate when there are no credentials to redact" >> {
       val conf = Json.obj(
         "bucket" -> Json.jString("https://some.bucket.uri"),
         "jsonParsing" -> Json.jString("array"))
 
-      S3DatasourceModule.sanitizeConfig(conf) must_== conf
+      val migrated = Json.obj(
+        "bucket" -> Json.jString("https://some.bucket.uri"),
+        "credentials" -> Json.jNull,
+        "format" -> Json.obj(
+          "type" -> Json.jString("json"),
+          "variant" -> Json.jString("array-wrapped"),
+          "precise" -> Json.jBool(false)))
+
+      S3DatasourceModule.sanitizeConfig(conf) must_== migrated
     }
   }
 }
