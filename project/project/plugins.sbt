@@ -3,4 +3,4 @@ resolvers += Resolver.bintrayRepo("slamdata-inc", "maven-public")
 resolvers += Resolver.bintrayIvyRepo("djspiewak", "ivy")
 
 addSbtPlugin("io.get-coursier" % "sbt-coursier" % "2.0.0-RC2-1")
-addSbtPlugin("com.slamdata"    % "sbt-slamdata" % "3.2.1")
+addSbtPlugin("com.slamdata"    % "sbt-slamdata" % "4.0.0")
