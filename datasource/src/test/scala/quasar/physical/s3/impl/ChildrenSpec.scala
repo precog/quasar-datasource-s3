@@ -23,20 +23,20 @@ import scala.concurrent.ExecutionContext
 import cats.effect.IO
 import cats.data.OptionT
 import org.http4s.Uri
-import org.http4s.client.blaze.BlazeClientBuilder
 import org.specs2.mutable.Specification
 import pathy.Path
 import scalaz.{-\/, \/-}
 
 final class ChildrenSpec extends Specification {
   "lists all resources at the root of the bucket, one per request" >> {
-    implicit val cs = IO.contextShift(ExecutionContext.global)
+    implicit val ec = ExecutionContext.global
+    implicit val cs = IO.contextShift(ec)
     // Force S3 to return a single element per page in ListObjects,
     // to ensure pagination works correctly
     val bucket = Uri.uri("https://slamdata-public-test.s3.amazonaws.com").withQueryParam("max-keys", "1")
 
     val dir = Path.rootDir
-    val client = BlazeClientBuilder[IO](ExecutionContext.global).resource
+    val client = AsyncHttpClientBuilder[IO]
 
     OptionT(client.use(impl.children(_, bucket, dir)))
       .getOrElseF(IO.raiseError(new Exception("Could not list children under the root")))

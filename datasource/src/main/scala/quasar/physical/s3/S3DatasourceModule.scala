@@ -33,7 +33,6 @@ import cats.syntax.either._
 import cats.syntax.functor._
 import cats.instances.option._
 import org.http4s.client.Client
-import org.http4s.client.blaze.BlazeClientBuilder
 import org.http4s.client.middleware.FollowRedirect
 import scalaz.NonEmptyList
 import shims._
@@ -90,8 +89,5 @@ object S3DatasourceModule extends LightweightDatasourceModule {
   private def mkClient[F[_]: ConcurrentEffect](conf: S3Config)
       (implicit ec: ExecutionContext)
       : Resource[F, Client[F]] =
-    BlazeClientBuilder[F](ec)
-      .withIdleTimeout(Duration.Inf)
-      .resource
-      .map(AwsV4Signing(conf))
+    AsyncHttpClientBuilder[F].map(AwsV4Signing(conf))
 }
