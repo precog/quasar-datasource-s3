@@ -22,7 +22,6 @@ import quasar.api.datasource.DatasourceError.InitializationError
 import quasar.connector.{LightweightDatasourceModule, MonadResourceErr}, LightweightDatasourceModule.DS
 import quasar.physical.s3.S3Datasource.{Live, NotLive, Redirected}
 
-import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext
 import scala.util.Either
 
