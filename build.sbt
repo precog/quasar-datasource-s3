@@ -40,7 +40,7 @@ lazy val core = project
       */
     datasourceDependencies ++= Seq(
       "org.http4s"             %% "http4s-scala-xml"    % http4sVersion,
-      "org.http4s"             %% "http4s-blaze-client" % http4sVersion,
+      "org.http4s"             %% "http4s-async-http-client" % http4sVersion,
       "org.scala-lang.modules" %% "scala-xml"           % scalaXmlVersion,
       "com.codecommit"         %% "shims"               % shimsVersion,
       "org.typelevel"          %% "cats-effect"         % catsEffectVersion,

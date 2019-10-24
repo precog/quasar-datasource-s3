@@ -33,7 +33,6 @@ import cats.effect.{ConcurrentEffect, IO}
 import cats.syntax.applicative._
 import cats.syntax.functor._
 import fs2.Stream
-import org.http4s.client.blaze.BlazeClientBuilder
 import org.http4s.Uri
 import scalaz.{Id, ~>}, Id.Id
 import shims._
@@ -221,8 +220,8 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
   def mkDatasource[F[_] : ConcurrentEffect : MonadResourceErr](
       config: S3Config): F[DS[F]] = {
 
-    val ec = ExecutionContext.Implicits.global
-    val builder = BlazeClientBuilder[F](ec).allocated
+    implicit val ec = ExecutionContext.Implicits.global
+    val builder = AsyncHttpClientBuilder[F].allocated
     // FIXME: eliminate inheritance from DatasourceSpec and sequence the resource instead of
     // ignoring clean up here.
     val client = builder.map(_._1)
