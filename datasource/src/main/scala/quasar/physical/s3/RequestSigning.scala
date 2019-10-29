@@ -120,7 +120,7 @@ final case class RequestSigning(
       Headers(credentialsNow.sessionToken.toList map xAmzSecurityTokenHeader)
 
     val extraDateHeaders: Headers =
-      if (!headers.iterator.exists(_.name === Date.name)) Headers(xAmzDateHeader(now)) else Headers()
+      if (!headers.iterator.exists(_.name === Date.name)) Headers.of(xAmzDateHeader(now)) else Headers.of()
 
     val signedHeaders = headers ++ extraDateHeaders ++ extraSecurityHeaders
 
@@ -223,7 +223,7 @@ object AwsV4Signing {
           req => {
             // Requests that require signing also require `host` to always be present
             val req0 = req.uri.host match {
-              case Some(host) => req.withHeaders(Headers(Header("host", host.value)))
+              case Some(host) => req.withHeaders(Headers.of(Header("host", host.value)))
               case None => req
             }
 
