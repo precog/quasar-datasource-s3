@@ -28,14 +28,18 @@ import org.http4s.client.Client
 import org.http4s.client.asynchttpclient.AsyncHttpClient
 import org.http4s.util.threads.threadFactory
 
+import org.slf4s.Logging
+
 import java.net.{InetSocketAddress, ProxySelector}
+import java.net.Proxy
+import java.net.Proxy.{Type => ProxyType}
 
 import scala.concurrent.ExecutionContext
 import scala.collection.JavaConverters._
 
 import cats.effect.{ConcurrentEffect, Resource}
 
-object AsyncHttpClientBuilder extends Http4sClientBuilder {
+object AsyncHttpClientBuilder extends Http4sClientBuilder with Logging {
   def apply[F[_]: ConcurrentEffect](implicit ec: ExecutionContext): Resource[F, Client[F]] =
     Resource.liftF(Search[F]).flatMap(selector =>
       AsyncHttpClient.resource(mkConfig(selector)))
@@ -52,16 +56,31 @@ object AsyncHttpClientBuilder extends Http4sClientBuilder {
         s"http4s-async-http-client-worker-${i}"
       })).build()
 
+  private[s3] def sortProxies(proxies: List[Proxy]): List[Proxy] =
+    proxies.sortWith((l, r) => (l.`type`, r.`type`) match {
+      case (ProxyType.HTTP, ProxyType.DIRECT) => true
+      case (ProxyType.SOCKS, ProxyType.DIRECT) => true
+      case _ => false
+    })
+
   private case class ProxyVoleProxyServerSelector(selector: ProxySelector)
       extends ProxyServerSelector {
     def select(uri: Uri): ProxyServer = {
-      ProxySelector.setDefault(selector)    // NB: I don't think this is necessary
+      ProxySelector.setDefault(selector) // NB: I don't think this is necessary
 
       Option(selector)
         .flatMap(s => Option(s.select(uri.toJavaNetURI)))
-        .flatMap(_.asScala.toList.headOption)
+        .flatMap(proxies0 => {
+          val proxies = proxies0.asScala.toList
+          log.debug(s"Found proxies: $proxies")
+
+          val sortedProxies = sortProxies(proxies)
+          log.debug(s"Prioritized proxies as: $sortedProxies")
+
+          sortedProxies.headOption
+        })
         .flatMap(server => Option(server.address))
-        .map(_.asInstanceOf[InetSocketAddress])  // because Java
+        .map(_.asInstanceOf[InetSocketAddress]) // because Java
         .map(uriToProxyServer)
         .orNull // because Java x2
     }
