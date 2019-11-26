@@ -39,6 +39,7 @@ lazy val core = project
       * `datasourceQuasarVersion`.
       */
     datasourceDependencies ++= Seq(
+      "org.slf4s"              %% "slf4s-api"           % "1.7.25",
       "org.http4s"             %% "http4s-scala-xml"    % http4sVersion,
       "org.http4s"             %% "http4s-async-http-client" % http4sVersion,
       "org.scala-lang.modules" %% "scala-xml"           % scalaXmlVersion,
