@@ -18,6 +18,7 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 
+import quasar.RateLimiter
 import quasar.api.datasource.DatasourceError.AccessDenied
 import quasar.connector.ResourceError
 import quasar.contrib.scalaz.MonadError_
@@ -42,11 +43,12 @@ class S3DatasourceModuleSpec extends Specification {
       "bucket" -> Json.jString("https://slamdata-private-test.s3.amazonaws.com"),
       "jsonParsing" -> Json.jString("array"))
 
-    S3DatasourceModule.lightweightDatasource[IO](conf)
-      .use(ds => IO(ds must beLike {
-        case Left(AccessDenied(_, _, _)) => ok
-      }))
-      .unsafeRunSync()
+    RateLimiter[IO](1.0).flatMap(rl =>
+      S3DatasourceModule.lightweightDatasource[IO](conf, rl)
+        .use(ds => IO(ds must beLike {
+          case Left(AccessDenied(_, _, _)) => ok
+        })))
+        .unsafeRunSync()
   }
 
   "rejects a non-bucket URI" >> {
@@ -54,11 +56,12 @@ class S3DatasourceModuleSpec extends Specification {
       "bucket" -> Json.jString("https://google.com"),
       "jsonParsing" -> Json.jString("array"))
 
-    S3DatasourceModule.lightweightDatasource[IO](conf)
-      .use(ds => IO(ds must beLike {
-        case Left(AccessDenied(_, _, _)) => ok
-      }))
-      .unsafeRunSync()
+    RateLimiter[IO](1.0).flatMap(rl =>
+      S3DatasourceModule.lightweightDatasource[IO](conf, rl)
+        .use(ds => IO(ds must beLike {
+          case Left(AccessDenied(_, _, _)) => ok
+        })))
+        .unsafeRunSync()
   }
 
   "sanitizeConfig" in {
