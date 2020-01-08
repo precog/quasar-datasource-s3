@@ -18,9 +18,9 @@ val quasarVersion = IO.read(file("./quasar-version")).trim
 val http4sVersion = "0.20.10"
 val scalaXmlVersion = "1.1.0"
 
-val catsEffectVersion = "1.4.0"
+val catsEffectVersion = "2.0.0"
 val shimsVersion = "2.0.0"
-val specsVersion = "4.7.0"
+val specsVersion = "4.8.3"
 
 lazy val core = project
   .in(file("datasource"))
