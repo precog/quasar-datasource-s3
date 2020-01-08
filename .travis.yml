@@ -1,5 +1,5 @@
 language: scala
-scala: 2.12.6
+scala: 2.12.10
 jdk: openjdk8
 dist: trusty
 sudo: false
