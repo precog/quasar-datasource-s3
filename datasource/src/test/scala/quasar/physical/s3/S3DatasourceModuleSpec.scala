@@ -18,7 +18,7 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 
-import quasar.RateLimiter
+import quasar.{NoopRateLimitUpdater, RateLimiting, RateLimiter}
 import quasar.api.datasource.DatasourceError.AccessDenied
 import quasar.connector.ResourceError
 import quasar.contrib.scalaz.MonadError_
@@ -27,7 +27,9 @@ import scala.concurrent.ExecutionContext
 
 import argonaut.Json
 import cats.effect.{ContextShift, IO, Timer}
+import cats.kernel.instances.uuid._
 import org.specs2.mutable.Specification
+import java.util.UUID
 import shims._
 
 class S3DatasourceModuleSpec extends Specification {
@@ -37,14 +39,17 @@ class S3DatasourceModuleSpec extends Specification {
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
   implicit val ec: ExecutionContext = ExecutionContext.global
 
+  val rateLimiting: IO[RateLimiting[IO, UUID]] =
+    RateLimiter[IO, UUID](1.0, IO.delay(UUID.randomUUID()), NoopRateLimitUpdater[IO, UUID])
+
   "rejects invalid credentials" >> {
     // slamdata-private-test is a bucket that requires credentials to access
     val conf = Json.obj(
       "bucket" -> Json.jString("https://slamdata-private-test.s3.amazonaws.com"),
       "jsonParsing" -> Json.jString("array"))
 
-    RateLimiter[IO](1.0).flatMap(rl =>
-      S3DatasourceModule.lightweightDatasource[IO](conf, rl)
+    rateLimiting.flatMap((rl: RateLimiting[IO, UUID]) =>
+      S3DatasourceModule.lightweightDatasource[IO, UUID](conf, rl)
         .use(ds => IO(ds must beLike {
           case Left(AccessDenied(_, _, _)) => ok
         })))
@@ -56,8 +61,8 @@ class S3DatasourceModuleSpec extends Specification {
       "bucket" -> Json.jString("https://google.com"),
       "jsonParsing" -> Json.jString("array"))
 
-    RateLimiter[IO](1.0).flatMap(rl =>
-      S3DatasourceModule.lightweightDatasource[IO](conf, rl)
+    rateLimiting.flatMap((rl: RateLimiting[IO, UUID]) =>
+      S3DatasourceModule.lightweightDatasource[IO, UUID](conf, rl)
         .use(ds => IO(ds must beLike {
           case Left(AccessDenied(_, _, _)) => ok
         })))
