@@ -20,7 +20,7 @@ import slamdata.Predef._
 
 import quasar.{NoopRateLimitUpdater, RateLimiting, RateLimiter}
 import quasar.api.datasource.DatasourceError.AccessDenied
-import quasar.connector.ResourceError
+import quasar.connector.{ByteStore, ResourceError}
 import quasar.contrib.scalaz.MonadError_
 
 import scala.concurrent.ExecutionContext
@@ -49,7 +49,7 @@ class S3DatasourceModuleSpec extends Specification {
       "jsonParsing" -> Json.jString("array"))
 
     rateLimiting.flatMap((rl: RateLimiting[IO, UUID]) =>
-      S3DatasourceModule.lightweightDatasource[IO, UUID](conf, rl)
+      S3DatasourceModule.lightweightDatasource[IO, UUID](conf, rl, ByteStore.void[IO])
         .use(ds => IO(ds must beLike {
           case Left(AccessDenied(_, _, _)) => ok
         })))
@@ -62,7 +62,7 @@ class S3DatasourceModuleSpec extends Specification {
       "jsonParsing" -> Json.jString("array"))
 
     rateLimiting.flatMap((rl: RateLimiting[IO, UUID]) =>
-      S3DatasourceModule.lightweightDatasource[IO, UUID](conf, rl)
+      S3DatasourceModule.lightweightDatasource[IO, UUID](conf, rl, ByteStore.void[IO])
         .use(ds => IO(ds must beLike {
           case Left(AccessDenied(_, _, _)) => ok
         })))
