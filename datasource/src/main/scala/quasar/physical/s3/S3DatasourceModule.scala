@@ -18,7 +18,7 @@ package quasar.physical.s3
 
 import slamdata.Predef.{Stream => _, _}
 
-import quasar.RateLimiter
+import quasar.RateLimiting
 import quasar.api.datasource.{DatasourceError, DatasourceType}
 import quasar.api.datasource.DatasourceError.InitializationError
 import quasar.connector.{LightweightDatasourceModule, MonadResourceErr}, LightweightDatasourceModule.DS
@@ -29,6 +29,7 @@ import scala.util.Either
 
 import argonaut.{Json, Argonaut}, Argonaut._
 import cats.effect.{ConcurrentEffect, ContextShift, Resource, Timer}
+import cats.kernel.Hash
 import cats.syntax.applicative._
 import cats.syntax.either._
 import cats.syntax.functor._
@@ -47,9 +48,10 @@ object S3DatasourceModule extends LightweightDatasourceModule {
   def kind: DatasourceType = s3.datasourceKind
 
   @SuppressWarnings(Array("org.wartremover.warts.ImplicitParameter"))
-  def lightweightDatasource[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
+  def lightweightDatasource[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer, A: Hash](
       config: Json,
-      rateLimiter: RateLimiter[F])(implicit ec: ExecutionContext)
+      rateLimiting: RateLimiting[F, A])(
+      implicit ec: ExecutionContext)
       : Resource[F, Either[InitializationError[Json], DS[F]]] =
     config.as[S3Config].result match {
       case Right(s3Config) =>
