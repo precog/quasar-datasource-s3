@@ -21,7 +21,7 @@ import slamdata.Predef.{Stream => _, _}
 import quasar.RateLimiting
 import quasar.api.datasource.{DatasourceError, DatasourceType}
 import quasar.api.datasource.DatasourceError.InitializationError
-import quasar.connector.{LightweightDatasourceModule, MonadResourceErr}, LightweightDatasourceModule.DS
+import quasar.connector.{ByteStore, LightweightDatasourceModule, MonadResourceErr}, LightweightDatasourceModule.DS
 import quasar.physical.s3.S3Datasource.{Live, NotLive, Redirected}
 
 import scala.concurrent.ExecutionContext
@@ -50,7 +50,8 @@ object S3DatasourceModule extends LightweightDatasourceModule {
   @SuppressWarnings(Array("org.wartremover.warts.ImplicitParameter"))
   def lightweightDatasource[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer, A: Hash](
       config: Json,
-      rateLimiting: RateLimiting[F, A])(
+      rateLimiting: RateLimiting[F, A],
+      byteStore: ByteStore[F])(
       implicit ec: ExecutionContext)
       : Resource[F, Either[InitializationError[Json], DS[F]]] =
     config.as[S3Config].result match {
