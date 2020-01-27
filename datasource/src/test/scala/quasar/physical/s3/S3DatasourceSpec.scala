@@ -194,7 +194,7 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
       expected: Array[Byte]) =
     ds.evaluate(iRead(path)) flatMap {
       case QueryResult.Typed(_, data, ScalarStages.Id) =>
-        data.compile.to[Array].map(_ must_=== expected)
+        data.compile.to(Array).map(_ must_=== expected)
 
       case _ =>
         IO(ko("Unexpected QueryResult"))
