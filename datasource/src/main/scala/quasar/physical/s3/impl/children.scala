@@ -43,7 +43,7 @@ import org.http4s.{MalformedMessageBodyFailure, Query, Status}
 import org.http4s.client.{Client, UnexpectedStatus}
 import org.http4s.headers.`Content-Type`
 import org.http4s.scalaxml.{xml => xmlDecoder}
-import org.http4s.{Charset, DecodeResult, EntityDecoder, MediaRange, Message, Request, Uri}
+import org.http4s.{Charset, DecodeResult, EntityDecoder, Media, MediaRange, Request, Uri}
 import pathy.Path
 import pathy.Path.{DirName, FileName}
 import scala.xml.Elem
@@ -228,10 +228,11 @@ object children {
     new EntityDecoder[F, Elem] {
       override def consumes: Set[MediaRange] =
         ev.consumes
-      override def decode(msg: Message[F], strict: Boolean): DecodeResult[F, Elem] = {
-        val utf8ContentType = msg.headers.get(`Content-Type`).map(_.withCharset(Charset.`UTF-8`))
+      override def decode(media: Media[F], strict: Boolean): DecodeResult[F, Elem] = {
+        val utf8ContentType = media.headers.get(`Content-Type`).map(_.withCharset(Charset.`UTF-8`))
+        val h = utf8ContentType.fold(media.headers)(media.headers.put(_))
 
-        ev.decode(msg.withContentTypeOption(utf8ContentType), strict)
+        ev.decode(Media[F](media.body, h), strict)
       }
     }
   }
