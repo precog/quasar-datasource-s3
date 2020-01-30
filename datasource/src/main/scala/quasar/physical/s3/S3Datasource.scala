@@ -1,5 +1,5 @@
 /*
- * Copyright 2014–2019 SlamData Inc.
+ * Copyright 2014–2020 SlamData Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import quasar.connector.datasource.LightweightDatasource
 import quasar.contrib.scalaz.MonadError_
 import quasar.qscript.InterpretedRead
 
-import slamdata.Predef.{Stream => _, _}
+import slamdata.Predef._
 
 import cats.data.OptionT
 import cats.effect.Effect
