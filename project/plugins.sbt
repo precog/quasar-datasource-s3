@@ -1,5 +1,6 @@
 resolvers += Resolver.sonatypeRepo("releases")
+resolvers += Resolver.bintrayIvyRepo("slamdata-inc", "sbt-plugins")
 resolvers += Resolver.bintrayRepo("slamdata-inc", "maven-public")
 
-addSbtPlugin("com.slamdata" % "sbt-slamdata" % "5.3.2")
+addSbtPlugin("com.slamdata" % "sbt-slamdata" % "5.4.0-45f3e27")
 addSbtPlugin("com.slamdata" % "sbt-quasar-datasource" % "0.1.7")
