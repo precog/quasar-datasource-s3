@@ -2,6 +2,12 @@ name: srcs3build
 
 on: pull_request
 
+env:
+  SBT: ./sbt
+  JDK: 1.8
+  REPO_SLUG: ${{ github.repository }}
+  ENCRYPTION_PASSWORD: ${{ secrets.ENCRYPTION_PASSWORD }}
+
 jobs:
   build:
     name: Build
@@ -13,10 +19,10 @@ jobs:
     steps:
       - name: Checkout branch
         uses: actions/checkout@v2
-      - name: Set up JDK 1.8
+      - name: Set up JDK ${{ env.JDK }}
         uses: actions/setup-java@v1
         with:
-          java-version: 1.8
+          java-version: ${{ env.JDK }}
       - name: Setup Git Actor
         run: git config github.actor slamdata-bot
       - name: Decode testCredentials
@@ -24,7 +30,7 @@ jobs:
       - name: Run datasourceAssemblePlugin
         run: ./sbt ++${{ matrix.scala }} datasourceAssemblePlugin
       - name: Compile and test
-        run: ./sbt ++${{ matrix.scala }} test
+        run: $SBT ++${{ matrix.scala }} ci
       - name: Upload target
         uses: actions/upload-artifact@v1
         with:
@@ -69,8 +75,12 @@ jobs:
           name: target
       - name: Setup Git Actor
         run: git config github.actor slamdata-bot
+      - name: Set up JDK ${{ env.JDK }}
+        uses: actions/setup-java@v1
+        with:
+          java-version: ${{ env.JDK }}
       - name: Install common resources
-        run: ./sbt transferCommonResources
+        run:  $SBT transferCommonResources
       - name: Install ruby
         uses: actions/setup-ruby@v1
         with:
@@ -80,7 +90,6 @@ jobs:
           echo ::set-env name=VERSIONS::$(git diff HEAD^1 | grep -e '^[-+][0-9]' | sed 's/^[+\-]//' | sed 's/\.[0-9]*$//' | uniq | wc -l)
           echo ::set-env name=CLONE_DIR::$(mktemp -d "/tmp/slamdata-bump.XXXXXXXX")
           echo ::set-env name=IS_REVISION_LABEL::${{ contains(github.event.pull_request.labels.*.name, 'revision') }}
-          echo ::set-env name=REPO_SLUG::${{ github.repository }}
           echo ::set-env name=PR_NUMBER::$(echo "$GITHUB_REF" | cut -d'/' -f3)
       - name: Run automerge
         run: ./scripts/core/checkAndAutoMerge
