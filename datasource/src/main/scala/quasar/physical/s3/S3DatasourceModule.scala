@@ -21,7 +21,8 @@ import slamdata.Predef._
 import quasar.RateLimiting
 import quasar.api.datasource.{DatasourceError, DatasourceType}
 import quasar.api.datasource.DatasourceError.InitializationError
-import quasar.connector.{ByteStore, LightweightDatasourceModule, MonadResourceErr}, LightweightDatasourceModule.DS
+import quasar.connector.{ByteStore, MonadResourceErr}
+import quasar.connector.datasource.LightweightDatasourceModule
 import quasar.physical.s3.S3Datasource.{Live, NotLive, Redirected}
 
 import scala.concurrent.ExecutionContext
@@ -53,7 +54,7 @@ object S3DatasourceModule extends LightweightDatasourceModule {
       rateLimiting: RateLimiting[F, A],
       byteStore: ByteStore[F])(
       implicit ec: ExecutionContext)
-      : Resource[F, Either[InitializationError[Json], DS[F]]] =
+      : Resource[F, Either[InitializationError[Json], LightweightDatasourceModule.DS[F]]] =
     config.as[S3Config].result match {
       case Right(s3Config) =>
         mkClient(s3Config) evalMap { client =>
@@ -79,7 +80,7 @@ object S3DatasourceModule extends LightweightDatasourceModule {
       case Left((msg, _)) =>
         DatasourceError
           .invalidConfiguration[Json, InitializationError[Json]](kind, sanitizeConfig(config), NonEmptyList(msg))
-          .asLeft[DS[F]]
+          .asLeft[LightweightDatasourceModule.DS[F]]
           .pure[Resource[F, ?]]
     }
 

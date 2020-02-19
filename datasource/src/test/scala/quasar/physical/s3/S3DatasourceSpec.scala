@@ -20,7 +20,8 @@ import slamdata.Predef._
 
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.common.data.Data
-import quasar.connector._, LightweightDatasourceModule.DS
+import quasar.connector._
+import quasar.connector.datasource.{DatasourceSpec, LightweightDatasourceModule}
 import quasar.contrib.scalaz.MonadError_
 import quasar.qscript.InterpretedRead
 import quasar.ScalarStages
@@ -180,7 +181,7 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
       val ds = creds.flatMap(c => mkDatasource[G](S3Config(testBucket, DataFormat.json, c)))
 
       val path = ResourcePath.root() / ResourceName("does-not-exist")
-      val read: G[QueryResult[G]] = ds.flatMap(_.evaluate(iRead(path)))
+      val read = ds.flatMap(_.loadFull(iRead(path)).value)
 
       run(read.value) must beLeft.like {
         case ResourceError.throwableP(ResourceError.PathNotFound(_)) => ok
@@ -189,11 +190,11 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
   }
 
   def assertResultBytes(
-      ds: DS[IO],
+      ds: LightweightDatasourceModule.DS[IO],
       path: ResourcePath,
       expected: Array[Byte]) =
-    ds.evaluate(iRead(path)) flatMap {
-      case QueryResult.Typed(_, data, ScalarStages.Id) =>
+    ds.loadFull(iRead(path)).value flatMap {
+      case Some(QueryResult.Typed(_, data, ScalarStages.Id)) =>
         data.compile.to(Array).map(_ must_=== expected)
 
       case _ =>
@@ -218,7 +219,7 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
   val run = λ[IO ~> Id](_.unsafeRunSync)
 
   def mkDatasource[F[_] : ConcurrentEffect : MonadResourceErr](
-      config: S3Config): F[DS[F]] = {
+      config: S3Config): F[LightweightDatasourceModule.DS[F]] = {
 
     implicit val ec = ExecutionContext.Implicits.global
     val builder = AsyncHttpClientBuilder[F].allocated

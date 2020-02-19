@@ -16,17 +16,17 @@
 
 package quasar.physical.s3
 
+import slamdata.Predef._
+
 import quasar.api.datasource.DatasourceType
 import quasar.api.resource.ResourcePath.{Leaf, Root}
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.connector.{MonadResourceErr, QueryResult, ResourceError}
-import quasar.connector.datasource.LightweightDatasource
+import quasar.connector.datasource.{BatchLoader, LightweightDatasource, Loader}
 import quasar.contrib.scalaz.MonadError_
 import quasar.qscript.InterpretedRead
 
-import slamdata.Predef._
-
-import cats.data.OptionT
+import cats.data.{NonEmptyList, OptionT}
 import cats.effect.Effect
 import cats.syntax.applicative._
 import cats.syntax.eq._
@@ -48,7 +48,7 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
 
   def kind: DatasourceType = s3.datasourceKind
 
-  def evaluate(iRead: InterpretedRead[ResourcePath]): F[QueryResult[F]] =
+  val loaders = NonEmptyList.of(Loader.Batch(BatchLoader.Full { (iRead: InterpretedRead[ResourcePath]) =>
     iRead.path match {
       case Root =>
         MonadError_[F, ResourceError].raiseError(ResourceError.notAResource(iRead.path))
@@ -58,6 +58,7 @@ final class S3Datasource[F[_]: Effect: MonadResourceErr](
           QueryResult.typed(config.format, bytes, iRead.stages)
         }
     }
+  }))
 
   def prefixedChildPaths(path: ResourcePath): F[Option[Stream[F, (ResourceName, ResourcePathType.Physical)]]] =
     pathIsResource(path).ifM(
