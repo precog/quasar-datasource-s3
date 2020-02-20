@@ -1,4 +1,4 @@
-name: srcs3build
+name: build
 
 on: pull_request
 
@@ -7,6 +7,7 @@ env:
   JDK: 1.8
   REPO_SLUG: ${{ github.repository }}
   ENCRYPTION_PASSWORD: ${{ secrets.ENCRYPTION_PASSWORD }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   build:
@@ -31,32 +32,42 @@ jobs:
         run: ./sbt ++${{ matrix.scala }} datasourceAssemblePlugin
       - name: Compile and test
         run: $SBT ++${{ matrix.scala }} ci
-      - name: Upload target
+      - name: Upload working directory
         uses: actions/upload-artifact@v1
         with:
-          name: target
-          path: target
+          name: working-dir
+          path: .
 
-  publishandtag:
+  publish-and-tag:
     name: Publish and Tag
-    if: github.event_name != 'pull_request' && (contains(github.head_ref, 'backport/v.*') || contains(github.head_ref, 'master'))
+    if: github.event_name != 'pull_request' && (contains(github.ref, 'backport/v.*') || contains(github.ref, 'master'))
     needs: [build]
     runs-on: [ubuntu-latest]
     steps:
       - name: Checkout branch
         uses: actions/checkout@v2
-      - name: Download target artifacts
+      - name: Download working directory
         uses: actions/download-artifact@v1
         with:
-          name: target
+          name: working-dir
       - name: Setup Git Actor
         run: git config github.actor slamdata-bot
+      - name: Set up JDK ${{ env.JDK }}
+        uses: actions/setup-java@v1
+        with:
+          java-version: ${{ env.JDK }}
+      - name: Install ruby
+        uses: actions/setup-ruby@v1
+        with:
+          ruby-version: '2.6'
       - name: Create scripts dir
         run: mkdir ./scripts
       - name: Transfer Common Resources
         run: $SBT transferCommonResources
       - name: Export common secrets
         run: $SBT exportSecretsForActions
+      - name: Common setup
+        run: ./scripts/commonSetup
       - name: Publish and Tag
         run: ./scripts/publishAndTag 'slamdata/quasar-datasource-s3'
       - name: Bump Downstream
@@ -65,7 +76,7 @@ jobs:
           export -f bumpInDownstream
           ./scripts/bumpDependentProject slamdata slamx bumpInDownstream
 
-  automerge:
+  auto-merge:
     name: Auto Merge
     if: github.event_name == 'pull_request' && contains(github.head_ref, 'version-bump')
     needs: [build]
@@ -73,10 +84,10 @@ jobs:
     steps:
       - name: Checkout branch
         uses: actions/checkout@v2
-      - name: Download target artifacts
+      - name: Download working directory
         uses: actions/download-artifact@v1
         with:
-          name: target
+          name: working-dir
       - name: Setup Git Actor
         run: git config github.actor slamdata-bot
       - name: Create scripts dir
@@ -93,6 +104,8 @@ jobs:
         run: $SBT transferCommonResources
       - name: Export common secrets
         run: $SBT exportSecretsForActions
+      - name: Common setup
+        run: ./scripts/commonSetup
       - name: Set env vars
         run: |
           echo ::set-env name=VERSIONS::$(git diff HEAD^1 | grep -e '^[-+][0-9]' | sed 's/^[+\-]//' | sed 's/\.[0-9]*$//' | uniq | wc -l)
@@ -100,4 +113,4 @@ jobs:
           echo ::set-env name=IS_REVISION_LABEL::${{ contains(github.event.pull_request.labels.*.name, 'revision') }}
           echo ::set-env name=PR_NUMBER::$(echo "$GITHUB_REF" | cut -d'/' -f3)
       - name: Run automerge
-        run: ./scripts/core/checkAndAutoMerge
+        run: ./scripts/checkAndAutoMerge
