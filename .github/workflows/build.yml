@@ -68,6 +68,8 @@ jobs:
         run: mkdir ./scripts
       - name: Transfer Common Resources
         run: $SBT transferCommonResources
+      - name: Transfer Publish Resources
+        run: $SBT transferPublishAndTagResources
       - name: Export common secrets
         run: $SBT exportSecretsForActions
       - name: Common setup
