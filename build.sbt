@@ -15,8 +15,6 @@ lazy val root = project
   .settings(noPublishSettings)
   .aggregate(core)
 
-val quasarVersion = IO.read(file("./quasar-version")).trim
-
 val http4sVersion = "0.21.0-RC2"
 val scalaXmlVersion = "1.1.0"
 
@@ -32,7 +30,7 @@ lazy val core = project
 
     datasourceName := "s3",
 
-    datasourceQuasarVersion := quasarVersion,
+    datasourceQuasarVersion := managedVersions.value("slamdata-quasar"),
 
     datasourceModuleFqcn := "quasar.physical.s3.S3DatasourceModule$",
 
@@ -47,7 +45,7 @@ lazy val core = project
       "org.scala-lang.modules" %% "scala-xml"           % scalaXmlVersion,
       "com.codecommit"         %% "shims"               % shimsVersion,
       "org.typelevel"          %% "cats-effect"         % catsEffectVersion,
-      "com.slamdata"           %% "quasar-foundation"   % quasarVersion % Test classifier "tests",
+      "com.slamdata"           %% "quasar-foundation"   % managedVersions.value("slamdata-quasar") % Test classifier "tests",
       "org.http4s"             %% "http4s-dsl"          % http4sVersion % Test,
       "org.specs2"             %% "specs2-core"         % specsVersion % Test,
       "org.specs2"             %% "specs2-scalaz"       % specsVersion % Test,
