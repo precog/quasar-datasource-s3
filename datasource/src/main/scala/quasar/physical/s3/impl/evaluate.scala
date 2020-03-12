@@ -28,7 +28,7 @@ import cats.syntax.flatMap._
 
 import fs2.Stream
 import org.http4s.client._
-import org.http4s.{Request, Status, Uri}
+import org.http4s.{Method, Request, Status, Uri}
 import pathy.Path
 import shims._
 
@@ -53,7 +53,7 @@ object evaluate {
     client: Client[F], req: Request[F], file: AFile)
     (implicit MR: MonadResourceErr[F])
       : F[Stream[F, Byte]] =
-    client.status(req) flatMap {
+    client.status(req.withMethod(Method.HEAD)) flatMap {
       case Status.NotFound => MR.raiseError(ResourceError.pathNotFound(ResourcePath.Leaf(file)))
       case Status.Ok => client.stream(req).flatMap(_.body).pure[F]
       case s => Sync[F].raiseError(new Exception(s"Unexpected status $s"))
