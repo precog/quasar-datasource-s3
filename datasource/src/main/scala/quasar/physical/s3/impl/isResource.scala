@@ -18,12 +18,11 @@ package quasar.physical.s3.impl
 
 import slamdata.Predef._
 import quasar.api.resource.ResourcePath
-import quasar.connector.{MonadResourceErr, ResourceError}
+import quasar.connector.MonadResourceErr
 import quasar.contrib.pathy._
 
 
 import cats.Monad
-import cats.effect.Effect
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
 
