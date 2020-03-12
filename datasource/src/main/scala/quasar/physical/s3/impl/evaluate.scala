@@ -22,7 +22,7 @@ import quasar.api.resource.ResourcePath
 import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.contrib.pathy._
 
-import cats.effect.{Effect, Sync}
+import cats.Monad
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
 
@@ -34,8 +34,8 @@ import shims._
 
 object evaluate {
 
-  def apply[F[_]: Effect](client: Client[F], uri: Uri, file: AFile)
-    (implicit MR: MonadResourceErr[F])
+  def apply[F[_]: Monad: MonadResourceErr](
+      client: Client[F], uri: Uri, file: AFile)
       : F[Stream[F, Byte]] = {
     // Convert the pathy Path to a POSIX path, dropping
     // the first slash, which is what S3 expects for object paths
@@ -49,13 +49,22 @@ object evaluate {
 
   ////
 
-  private def streamRequest[F[_]: Sync: MonadResourceErr](
-    client: Client[F], req: Request[F], file: AFile)
-    (implicit MR: MonadResourceErr[F])
+  private def streamRequest[F[_]: Monad: MonadResourceErr](
+      client: Client[F], req: Request[F], file: AFile)
       : F[Stream[F, Byte]] =
     client.status(req.withMethod(Method.HEAD)) flatMap {
-      case Status.NotFound => MR.raiseError(ResourceError.pathNotFound(ResourcePath.Leaf(file)))
-      case Status.Ok => client.stream(req).flatMap(_.body).pure[F]
-      case s => Sync[F].raiseError(new Exception(s"Unexpected status $s"))
+      case Status.NotFound =>
+        MonadResourceErr[F].raiseError(ResourceError.pathNotFound(ResourcePath.leaf(file)))
+
+      case Status.Forbidden =>
+        MonadResourceErr[F].raiseError(accessDeniedError(ResourcePath.leaf(file)))
+
+      case Status.Ok =>
+        client.stream(req).flatMap(_.body).pure[F]
+
+      case other =>
+        MonadResourceErr[F].raiseError(unexpectedStatusError(
+          ResourcePath.leaf(file),
+          other))
     }
 }

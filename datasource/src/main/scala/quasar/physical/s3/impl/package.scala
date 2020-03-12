@@ -17,6 +17,8 @@
 package quasar.physical.s3
 
 import slamdata.Predef._
+import quasar.api.resource.ResourcePath
+import quasar.connector.ResourceError
 
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -24,7 +26,8 @@ import java.nio.charset.StandardCharsets
 import cats.instances.char._
 import cats.instances.option._
 import cats.syntax.eq._
-import org.http4s.Uri
+
+import org.http4s.{Status, Uri}
 
 package object impl {
   // this type comes up too many times to write out myself.
@@ -62,4 +65,15 @@ package object impl {
       .map({ case (k, v) => s3Encode(k, encodeSlash = true) + "=" + s3Encode(v, encodeSlash = true) })
       .mkString("&")
 
+  def accessDeniedError(path: ResourcePath): ResourceError =
+      ResourceError.accessDenied(
+        path,
+        Some("Access denied, make sure you have access to the configured bucket."),
+        None)
+
+  def unexpectedStatusError(path: ResourcePath, status: Status): ResourceError =
+      ResourceError.connectionFailed(
+        path,
+        Some(s"Unexpeced HTTP response status: $status"),
+        None)
 }

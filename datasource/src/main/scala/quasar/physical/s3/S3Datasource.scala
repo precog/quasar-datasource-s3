@@ -27,7 +27,7 @@ import quasar.contrib.scalaz.MonadError_
 import quasar.qscript.InterpretedRead
 
 import cats.data.{NonEmptyList, OptionT}
-import cats.effect.Effect
+import cats.effect.Sync
 import cats.syntax.applicative._
 import cats.syntax.eq._
 import cats.syntax.flatMap._
@@ -39,7 +39,7 @@ import pathy.Path
 import scalaz.{\/-, -\/}
 import shims._
 
-final class S3Datasource[F[_]: Effect: MonadResourceErr](
+final class S3Datasource[F[_]: Sync: MonadResourceErr](
     client: Client[F],
     config: S3Config)
     extends LightweightDatasource[F, Stream[F, ?], QueryResult[F]] {
