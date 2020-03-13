@@ -1,11 +1,9 @@
 # Quasar S3 Datasource
 
-[![Build Status](https://travis-ci.org/slamdata/quasar-datasource-s3.svg?branch=master)](https://travis-ci.org/slamdata/quasar-datasource-s3)
-
 ## Usage
 
 ```sbt
-libraryDependencies += "com.slamdata" %% "quasar-datasource-s3" % <version>
+libraryDependencies += "com.precog" %% "quasar-datasource-s3" % <version>
 ```
 
 ## Configuration

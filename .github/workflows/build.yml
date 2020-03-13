@@ -11,7 +11,7 @@ env:
   JDK: 1.8
   REPO_SLUG: ${{ github.repository }}
   ENCRYPTION_PASSWORD: ${{ secrets.ENCRYPTION_PASSWORD }}
-  GITHUB_ACTOR: slamdata-bot
+  GITHUB_ACTOR: precog-bot
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
@@ -30,7 +30,7 @@ jobs:
         with:
           java-version: ${{ env.JDK }}
       - name: Setup Git Actor
-        run: git config github.actor slamdata-bot
+        run: git config github.actor precog-bot
       - name: Decode testCredentials
         run: base64 -d testCredentials.json.b64 > testCredentials.json
       - name: Run datasourceAssemblePlugin
@@ -58,7 +58,7 @@ jobs:
         with:
           name: working-dir
       - name: Setup Git Actor
-        run: git config github.actor slamdata-bot
+        run: git config github.actor precog-bot
       - name: Set up JDK ${{ env.JDK }}
         uses: actions/setup-java@v1
         with:
@@ -78,7 +78,7 @@ jobs:
       - name: Common setup
         run: ./scripts/commonSetup
       - name: Publish and Tag
-        run: ./scripts/publishAndTag 'slamdata/quasar-datasource-s3'
+        run: ./scripts/publishAndTag 'precog/quasar-datasource-s3'
 
   auto-merge:
     name: Auto Merge
@@ -95,7 +95,7 @@ jobs:
         with:
           name: working-dir
       - name: Setup Git Actor
-        run: git config github.actor slamdata-bot
+        run: git config github.actor precog-bot
       - name: Create scripts dir
         run: mkdir ./scripts
       - name: Set up JDK ${{ env.JDK }}
@@ -114,7 +114,7 @@ jobs:
         run: ./scripts/commonSetup
       - name: Set env vars
         run: |
-          echo ::set-env name=CLONE_DIR::$(mktemp -d "/tmp/slamdata-bump.XXXXXXXX")
+          echo ::set-env name=CLONE_DIR::$(mktemp -d "/tmp/precog-bump.XXXXXXXX")
           echo ::set-env name=PR_NUMBER::$(echo "$GITHUB_REF" | cut -d'/' -f3)
           echo ::set-env name=PULL_REQUEST::$(echo "true")
       - name: Run automerge
