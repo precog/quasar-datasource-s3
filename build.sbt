@@ -2,13 +2,15 @@ import scala.collection.Seq
 
 ThisBuild / scalaVersion := "2.12.10"
 
+ThisBuild / githubRepository := "quasar-datasource-s3"
+
 publishAsOSSProject in ThisBuild := true
 
-homepage in ThisBuild := Some(url("https://github.com/slamdata/quasar-datasource-s3"))
+homepage in ThisBuild := Some(url("https://github.com/precog/quasar-datasource-s3"))
 
 scmInfo in ThisBuild := Some(ScmInfo(
-  url("https://github.com/slamdata/quasar-datasource-s3"),
-  "scm:git@github.com:slamdata/quasar-datasource-s3.git"))
+  url("https://github.com/precog/quasar-datasource-s3"),
+  "scm:git@github.com:precog/quasar-datasource-s3.git"))
 
 lazy val root = project
   .in(file("."))
@@ -28,27 +30,27 @@ lazy val core = project
   .settings(
     name := "quasar-datasource-s3",
 
-    datasourceName := "s3",
+    quasarPluginName := "s3",
 
-    datasourceQuasarVersion := managedVersions.value("slamdata-quasar"),
+    quasarPluginQuasarVersion := managedVersions.value("precog-quasar"),
 
-    datasourceModuleFqcn := "quasar.physical.s3.S3DatasourceModule$",
+    quasarPluginDatasourceFqcn := Some("quasar.physical.s3.S3DatasourceModule$"),
 
     /** Specify managed dependencies here instead of with `libraryDependencies`.
       * Do not include quasar libs, they will be included based on the value of
       * `datasourceQuasarVersion`.
       */
-    datasourceDependencies ++= Seq(
+    quasarPluginDependencies ++= Seq(
       "org.slf4s"              %% "slf4s-api"           % "1.7.25",
       "org.http4s"             %% "http4s-scala-xml"    % http4sVersion,
       "org.http4s"             %% "http4s-async-http-client" % http4sVersion,
       "org.scala-lang.modules" %% "scala-xml"           % scalaXmlVersion,
       "com.codecommit"         %% "shims"               % shimsVersion,
       "org.typelevel"          %% "cats-effect"         % catsEffectVersion,
-      "com.slamdata"           %% "quasar-foundation"   % managedVersions.value("slamdata-quasar") % Test classifier "tests",
+      "com.precog"             %% "quasar-foundation"   % managedVersions.value("precog-quasar") % Test classifier "tests",
       "org.http4s"             %% "http4s-dsl"          % http4sVersion % Test,
       "org.specs2"             %% "specs2-core"         % specsVersion % Test,
       "org.specs2"             %% "specs2-scalaz"       % specsVersion % Test,
       "org.specs2"             %% "specs2-scalacheck"   % specsVersion % Test
     ))
-  .enablePlugins(AutomateHeaderPlugin, DatasourcePlugin)
+  .enablePlugins(QuasarPlugin)
