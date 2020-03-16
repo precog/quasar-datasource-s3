@@ -46,7 +46,10 @@ lazy val core = project
       "org.http4s"             %% "http4s-async-http-client" % http4sVersion,
       "org.scala-lang.modules" %% "scala-xml"           % scalaXmlVersion,
       "com.codecommit"         %% "shims"               % shimsVersion,
-      "org.typelevel"          %% "cats-effect"         % catsEffectVersion,
+      "org.typelevel"          %% "cats-effect"         % catsEffectVersion
+    ),
+
+    libraryDependencies ++= Seq(
       "com.precog"             %% "quasar-foundation"   % managedVersions.value("precog-quasar") % Test classifier "tests",
       "org.http4s"             %% "http4s-dsl"          % http4sVersion % Test,
       "org.specs2"             %% "specs2-core"         % specsVersion % Test,

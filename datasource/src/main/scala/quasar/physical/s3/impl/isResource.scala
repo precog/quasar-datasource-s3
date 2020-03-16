@@ -17,22 +17,26 @@
 package quasar.physical.s3.impl
 
 import slamdata.Predef._
-
+import quasar.api.resource.ResourcePath
+import quasar.connector.MonadResourceErr
 import quasar.contrib.pathy._
 
 
-import cats.effect.Effect
+import cats.Monad
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
+
 import org.http4s.client.Client
 import org.http4s.headers.Range
 import org.http4s.{Method, Request, Status, Uri, Headers}
+
 import pathy.Path
 
 // The simplest method to implement, check that HEAD doesn't
 // give a 404.
 object isResource {
-  def apply[F[_]: Effect](client: Client[F], uri: Uri, file: AFile)
+  def apply[F[_]: Monad: MonadResourceErr](
+      client: Client[F], uri: Uri, file: AFile)
       : F[Boolean] = {
 
     // Print pathy.Path as POSIX path, without leading slash,
@@ -49,18 +53,19 @@ object isResource {
       .withMethod(Method.HEAD)
       .withHeaders(Headers.of(Range(0, 1)))
 
-    if (Path.identicalPath(Path.rootDir, file)) {
+    if (Path.identicalPath(Path.rootDir, file))
       false.pure[F]
-    } else {
+    else
       // Don't use the metadata, just check the request status
       client.status(request) >>= {
         case Status.Ok => true.pure[F]
         case Status.PartialContent => true.pure[F]
         case Status.NotFound => false.pure[F]
         case Status.RangeNotSatisfiable => false.pure[F]
-        case Status.Forbidden => Effect[F].raiseError(new Exception(s"Permission denied. Make sure you have access to the configured bucket"))
-        case s => Effect[F].raiseError(new Exception(s"Unexpected status returned during `isResource` call: $s"))
+        case Status.Forbidden =>
+          MonadResourceErr[F].raiseError(accessDeniedError(ResourcePath.leaf(file)))
+        case other =>
+          MonadResourceErr[F].raiseError(unexpectedStatusError(ResourcePath.leaf(file), other))
       }
-    }
   }
 }

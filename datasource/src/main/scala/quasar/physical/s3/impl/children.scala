@@ -25,7 +25,7 @@ import quasar.contrib.pathy._
 import quasar.physical.s3.S3Error
 
 import cats.data.{EitherT, OptionT}
-import cats.effect.{Sync, Effect}
+import cats.effect.Sync
 import cats.instances.either._
 import cats.instances.int._
 import cats.instances.list._
@@ -52,7 +52,7 @@ import shims._
 
 object children {
   // FIXME: dir should be ADir and pathToDir should be deleted
-  def apply[F[_]: Effect](client: Client[F], bucket: Uri, dir: APath)
+  def apply[F[_]: Sync](client: Client[F], bucket: Uri, dir: APath)
       : F[Option[Stream[F, PathSegment]]] = {
     val msg = "Unexpected failure when streaming a multi-page response for ListBuckets"
 
@@ -78,7 +78,7 @@ object children {
 
   // FIXME parse the results as they arrive using an XML streaming parser, instead of paging
   // one response at a time
-  private def fetchResults[F[_]: Effect](
+  private def fetchResults[F[_]: Sync](
     client: Client[F],
     bucket: Uri,
     dir: APath,
@@ -91,7 +91,7 @@ object children {
   private def toPathSegment[F[_]](s: Stream[F, APath], dir: APath): Stream[F, PathSegment] =
     s.flatMap(p => Stream.emits(Path.peel(p).toList)).map(_._2)
 
-  private def listObjects[F[_]: Effect](
+  private def listObjects[F[_]: Sync](
     client: Client[F],
     bucket: Uri,
     dir: APath,
