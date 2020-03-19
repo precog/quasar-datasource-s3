@@ -17,7 +17,7 @@ lazy val root = project
   .settings(noPublishSettings)
   .aggregate(core)
 
-val http4sVersion = "0.21.0-RC2"
+val http4sVersion = "0.21.2"
 val scalaXmlVersion = "1.1.0"
 
 val catsEffectVersion = "2.0.0"
@@ -42,8 +42,8 @@ lazy val core = project
       */
     quasarPluginDependencies ++= Seq(
       "org.slf4s"              %% "slf4s-api"           % "1.7.25",
-      "org.http4s"             %% "http4s-scala-xml"    % http4sVersion,
-      "org.http4s"             %% "http4s-async-http-client" % http4sVersion,
+      "com.precog"             %% "http4s-scala-xml"    % http4sVersion,
+      "com.precog"             %% "http4s-async-http-client" % http4sVersion,
       "org.scala-lang.modules" %% "scala-xml"           % scalaXmlVersion,
       "com.codecommit"         %% "shims"               % shimsVersion,
       "org.typelevel"          %% "cats-effect"         % catsEffectVersion
@@ -51,7 +51,7 @@ lazy val core = project
 
     libraryDependencies ++= Seq(
       "com.precog"             %% "quasar-foundation"   % managedVersions.value("precog-quasar") % Test classifier "tests",
-      "org.http4s"             %% "http4s-dsl"          % http4sVersion % Test,
+      "com.precog"             %% "http4s-dsl"          % http4sVersion % Test,
       "org.specs2"             %% "specs2-core"         % specsVersion % Test,
       "org.specs2"             %% "specs2-scalaz"       % specsVersion % Test,
       "org.specs2"             %% "specs2-scalacheck"   % specsVersion % Test
