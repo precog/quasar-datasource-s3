@@ -12,6 +12,11 @@ scmInfo in ThisBuild := Some(ScmInfo(
   url("https://github.com/precog/quasar-datasource-s3"),
   "scm:git@github.com:precog/quasar-datasource-s3.git"))
 
+ThisBuild / githubWorkflowBuildPreamble +=
+  WorkflowStep.Run(
+    List("base64 -d testCredentials.json.b64 > testCredentials.json"),
+    name = Some("Decode testCredentials"))
+
 lazy val root = project
   .in(file("."))
   .settings(noPublishSettings)
