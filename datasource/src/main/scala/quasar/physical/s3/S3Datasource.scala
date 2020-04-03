@@ -27,7 +27,7 @@ import quasar.contrib.scalaz.MonadError_
 import quasar.qscript.InterpretedRead
 
 import cats.data.{NonEmptyList, OptionT}
-import cats.effect.Sync
+import cats.effect.{Resource, Sync}
 import cats.syntax.applicative._
 import cats.syntax.eq._
 import cats.syntax.flatMap._
@@ -42,7 +42,7 @@ import shims._
 final class S3Datasource[F[_]: Sync: MonadResourceErr](
     client: Client[F],
     config: S3Config)
-    extends LightweightDatasource[F, Stream[F, ?], QueryResult[F]] {
+    extends LightweightDatasource[Resource[F, ?], Stream[F, ?], QueryResult[F]] {
 
   import S3Datasource._
 
@@ -51,7 +51,8 @@ final class S3Datasource[F[_]: Sync: MonadResourceErr](
   val loaders = NonEmptyList.of(Loader.Batch(BatchLoader.Full { (iRead: InterpretedRead[ResourcePath]) =>
     iRead.path match {
       case Root =>
-        MonadError_[F, ResourceError].raiseError(ResourceError.notAResource(iRead.path))
+        Resource.liftF(MonadError_[F, ResourceError].raiseError[QueryResult[F]](
+          ResourceError.notAResource(iRead.path)))
 
       case Leaf(file) =>
         impl.evaluate[F](client, config.bucket, file) map { bytes =>
@@ -60,28 +61,34 @@ final class S3Datasource[F[_]: Sync: MonadResourceErr](
     }
   }))
 
-  def prefixedChildPaths(path: ResourcePath): F[Option[Stream[F, (ResourceName, ResourcePathType.Physical)]]] =
-    pathIsResource(path).ifM(
-      Stream.empty
-        .covaryOutput[(ResourceName, ResourcePathType.Physical)]
-        .covary[F].some.pure[F], // FIXME: static guarantees from pathIsResource
-      impl.children(client, config.bucket, path.toPath) map {
-        case None =>
-          none[Stream[F, (ResourceName, ResourcePathType.Physical)]]
-        case Some(paths) =>
-          paths.map {
-            case -\/(Path.DirName(dn)) => (ResourceName(dn), ResourcePathType.prefix)
-            case \/-(Path.FileName(fn)) => (ResourceName(fn), ResourcePathType.leafResource)
-          }.some
-      })
+  def prefixedChildPaths(path: ResourcePath)
+      : Resource[F, Option[Stream[F, (ResourceName, ResourcePathType.Physical)]]] =
+    pathIsResource(path) evalMap {
+      case true =>
+        Stream.empty
+          .covaryOutput[(ResourceName, ResourcePathType.Physical)]
+          .covary[F].some.pure[F] // FIXME: static guarantees from pathIsResource
 
-  def pathIsResource(path: ResourcePath): F[Boolean] = path match {
-    case Root => false.pure[F]
-    case Leaf(file) => Path.refineType(file) match {
-      case -\/(_) => false.pure[F]
-      case \/-(f) => impl.isResource(client, config.bucket, f)
+      case false =>
+        impl.children(client, config.bucket, path.toPath) map {
+          case None =>
+            none[Stream[F, (ResourceName, ResourcePathType.Physical)]]
+          case Some(paths) =>
+            paths.map {
+              case -\/(Path.DirName(dn)) => (ResourceName(dn), ResourcePathType.prefix)
+              case \/-(Path.FileName(fn)) => (ResourceName(fn), ResourcePathType.leafResource)
+            }.some
+        }
     }
-  }
+
+  def pathIsResource(path: ResourcePath): Resource[F, Boolean] =
+    Resource.liftF(path match {
+      case Root => false.pure[F]
+      case Leaf(file) => Path.refineType(file) match {
+        case -\/(_) => false.pure[F]
+        case \/-(f) => impl.isResource(client, config.bucket, f)
+      }
+    })
 
   def isLive(maxRedirects: Int): F[Liveness] =
     impl.preflightCheck(client, config.bucket, maxRedirects) flatMap {
@@ -108,4 +115,8 @@ object S3Datasource {
     def notLive: Liveness = NotLive
     def redirected(conf: S3Config): Liveness = Redirected(conf)
   }
+
+  def apply[F[_]: Sync: MonadResourceErr](client: Client[F], config: S3Config)
+      : S3Datasource[F] =
+    new S3Datasource[F](client, config)
 }

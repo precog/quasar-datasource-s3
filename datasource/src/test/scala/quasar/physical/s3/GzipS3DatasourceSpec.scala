@@ -17,27 +17,24 @@
 package quasar.physical.s3
 
 import slamdata.Predef._
+
 import quasar.api.resource.ResourcePath
 import quasar.connector.{CompressionScheme, QueryResult, DataFormat}
 import quasar.connector.datasource.LightweightDatasourceModule, LightweightDatasourceModule.DS
-import quasar.physical.s3.SecureS3DatasourceSpec._
-import quasar.qscript.InterpretedRead
-import quasar.ScalarStages
 
-import cats.effect.IO
-import cats.syntax.flatMap._
+import cats.effect.{IO, Resource}
+
 import org.http4s.Uri
-import shims._
 
 final class GzipS3DatasourceSpec extends S3DatasourceSpec {
 
   override val testBucket = Uri.uri("https://slamdata-public-gzip-test.s3.amazonaws.com")
 
   override def assertResultBytes(
-      ds: DS[IO],
+      ds: Resource[IO, DS[IO]],
       path: ResourcePath,
       expected: Array[Byte]) =
-    ds.loadFull(InterpretedRead(path, ScalarStages.Id)).value flatMap {
+    ds.flatMap(_.loadFull(iRead(path)).value) use {
       case Some(QueryResult.Typed(DataFormat.Compressed(CompressionScheme.Gzip, _), data, _)) =>
         // not worth checking the exact data here since it's still just transferring the exact byte stream
         // (as with non-gzipped configs)
@@ -48,18 +45,20 @@ final class GzipS3DatasourceSpec extends S3DatasourceSpec {
     }
 
   override val datasourceLD =
-    run(credentials >>= (creds => mkDatasource[IO](S3Config(
-      testBucket,
-      DataFormat.gzipped(DataFormat.ldjson),
-      creds))))
+    Resource.liftF(credentials) flatMap { creds =>
+      mkDatasource(S3Config(testBucket, DataFormat.gzipped(DataFormat.ldjson), creds))
+    }
+
   override val datasource =
-    run(credentials >>= (creds => mkDatasource[IO](S3Config(
-      testBucket,
-      DataFormat.gzipped(DataFormat.json),
-      creds))))
+    Resource.liftF(credentials) flatMap { creds =>
+      mkDatasource(S3Config(testBucket, DataFormat.gzipped(DataFormat.json), creds))
+    }
+
   override val datasourceCSV =
-    run(credentials >>= (creds => mkDatasource[IO](S3Config(
-      testBucket,
-      DataFormat.gzipped(DataFormat.SeparatedValues.Default),
-      creds))))
+    Resource.liftF(credentials) flatMap { creds =>
+      mkDatasource(S3Config(
+        testBucket,
+        DataFormat.gzipped(DataFormat.SeparatedValues.Default),
+        creds))
+    }
 }
