@@ -58,7 +58,7 @@ object S3DatasourceModule extends LightweightDatasourceModule {
     config.as[S3Config].result match {
       case Right(s3Config) =>
         mkClient(s3Config) evalMap { client =>
-          val s3Ds = new S3Datasource[F](client, s3Config)
+          val s3Ds = S3Datasource[F](client, s3Config)
           // FollowRediret is not mounted in mkClient because it interferes
           // with permanent redirect handling
           val redirectClient = FollowRedirect(MaxRedirects)(client)
@@ -95,5 +95,5 @@ object S3DatasourceModule extends LightweightDatasourceModule {
   private def mkClient[F[_]: ConcurrentEffect](conf: S3Config)
       (implicit ec: ExecutionContext)
       : Resource[F, Client[F]] =
-    AsyncHttpClientBuilder[F].map(AwsV4Signing(conf))
+    AsyncHttpClientBuilder[F].map[F, Client[F]](AwsV4Signing(conf))
 }

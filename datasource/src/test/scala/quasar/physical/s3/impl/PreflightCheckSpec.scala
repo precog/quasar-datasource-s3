@@ -23,6 +23,7 @@ import quasar.connector.DataFormat
 import scala.concurrent.ExecutionContext
 
 import cats.effect.IO
+
 import org.http4s.HttpRoutes
 import org.http4s.Method
 import org.http4s.Uri
@@ -30,12 +31,14 @@ import org.http4s.client.Client
 import org.http4s.dsl.io._
 import org.http4s.headers.Location
 import org.http4s.syntax.kleisli._
+
 import org.specs2.mutable.Specification
 
 final class PreflightCheckSpec extends Specification {
   implicit val cs = IO.contextShift(ExecutionContext.global)
 
   val maxRedirects = 3
+
   val app = HttpRoutes.of[IO] {
     case Method.HEAD -> Root / "bucket0" / "" =>
       SeeOther(Location(Uri.uri("http://localhost/bucket1/")))

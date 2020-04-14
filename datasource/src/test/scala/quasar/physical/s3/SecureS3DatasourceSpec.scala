@@ -18,22 +18,20 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 
-import quasar.connector.{ResourceError, DataFormat}
-import quasar.contrib.scalaz.MonadError_
+import quasar.connector.DataFormat
 
 import scala.io.{Source, Codec}
 
 import java.io.File
 
 import argonaut.{Parse, DecodeJson}
-import cats.effect.IO
+
+import cats.effect.{IO, Resource}
 import cats.syntax.flatMap._
 import cats.syntax.applicative._
 import cats.syntax.option._
-import org.http4s.Uri
-import shims._
 
-import SecureS3DatasourceSpec._
+import org.http4s.Uri
 
 final class SecureS3DatasourceSpec extends S3DatasourceSpec {
   override val testBucket = Uri.uri("https://slamdata-private-test.s3.amazonaws.com")
@@ -64,23 +62,17 @@ final class SecureS3DatasourceSpec extends S3DatasourceSpec {
   private val credsFile = "testCredentials.json"
 
   override val datasourceLD =
-    run(credentials >>= (creds => mkDatasource[IO](S3Config(
-      testBucket,
-      DataFormat.json,
-      creds))))
-  override val datasource =
-    run(credentials >>= (creds => mkDatasource[IO](S3Config(
-      testBucket,
-      DataFormat.json,
-      creds))))
-  override val datasourceCSV =
-    run(credentials >>= (creds => mkDatasource[IO](S3Config(
-      testBucket,
-      DataFormat.json,
-      creds))))
-}
+    Resource.liftF(credentials) flatMap { creds =>
+      mkDatasource(S3Config(testBucket, DataFormat.ldjson, creds))
+    }
 
-object SecureS3DatasourceSpec {
-  implicit val ioMonadResourceErr: MonadError_[IO, ResourceError] =
-    MonadError_.facet[IO](ResourceError.throwableP)
+  override val datasource =
+    Resource.liftF(credentials) flatMap { creds =>
+      mkDatasource(S3Config(testBucket, DataFormat.json, creds))
+    }
+
+  override val datasourceCSV =
+    Resource.liftF(credentials) flatMap { creds =>
+      mkDatasource(S3Config(testBucket, DataFormat.SeparatedValues.Default, creds))
+    }
 }

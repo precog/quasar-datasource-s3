@@ -18,25 +18,26 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 
+import quasar.ScalarStages
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.common.data.Data
 import quasar.connector._
 import quasar.connector.datasource.{DatasourceSpec, LightweightDatasourceModule}
 import quasar.contrib.scalaz.MonadError_
 import quasar.qscript.InterpretedRead
-import quasar.ScalarStages
 
 import java.nio.charset.Charset
 import scala.concurrent.ExecutionContext
 
-import cats.data.{EitherT, OptionT}
-import cats.effect.{ConcurrentEffect, IO}
+import cats.data.OptionT
+import cats.effect.{IO, Resource}
 import cats.syntax.applicative._
-import cats.syntax.functor._
+
 import fs2.Stream
+
 import org.http4s.Uri
-import scalaz.{Id, ~>}, Id.Id
-import shims._
+
+import shims.applicativeToScalaz
 
 import S3DatasourceSpec._
 
@@ -56,32 +57,32 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
   "pathIsResource" >> {
     "the root of a bucket is not a resource" >>* {
       val root = ResourcePath.root()
-      datasource.pathIsResource(root).map(_ must beFalse)
+      datasource.flatMap(_.pathIsResource(root)).use(b => IO.pure(b must beFalse))
     }
 
     "a prefix without contents is not a resource" >>* {
       val path = ResourcePath.root() / ResourceName("prefix3") / ResourceName("subprefix5")
-      datasource.pathIsResource(path).map(_ must beFalse)
+      datasource.flatMap(_.pathIsResource(path)).use(b => IO.pure(b must beFalse))
     }
 
     // this also tests request signing for secured buckets
     "a non-existing file with special chars is not a resource" >>* {
       val res = ResourcePath.root() / ResourceName("testData") / ResourceName("""-_.!~*'() /"\#$%^&<>,?[]+=:;`""")
-      datasource.pathIsResource(res) map (_ must beFalse)
+      datasource.flatMap(_.pathIsResource(res)).use(b => IO.pure(b must beFalse))
     }
 
     "an actual file is a resource" >>* {
       val res = ResourcePath.root() / ResourceName("testData") / ResourceName("array.json")
-      datasource.pathIsResource(res) map (_ must beTrue)
+      datasource.flatMap(_.pathIsResource(res)).use(b => IO.pure(b must beTrue))
     }
 
     "an actual file with special chars in path is a resource" >>* {
       val res = ResourcePath.root() / ResourceName("testData") / ResourceName("á") / ResourceName("βç.json")
-      datasource.pathIsResource(res) map (_ must beTrue)
+      datasource.flatMap(_.pathIsResource(res)).use(b => IO.pure(b must beTrue))
     }
 
     "an actual file with special chars in deeper path is a resource" >>* {
-      datasource.pathIsResource(spanishResource) map (_ must beTrue)
+      datasource.flatMap(_.pathIsResource(spanishResource)).use(b => IO.pure(b must beTrue))
     }
   }
 
@@ -176,24 +177,24 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
         esStr.getBytes(Charset.forName("UTF-8")))
     }
 
-    "reading a non-existent file raises ResourceError.PathNotFound" >> {
-      val creds = EitherT.right[Throwable](credentials)
-      val ds = creds.flatMap(c => mkDatasource[G](S3Config(testBucket, DataFormat.json, c)))
+    "reading a non-existent file raises ResourceError.PathNotFound" >>* {
+      val creds = Resource.liftF(credentials)
+      val ds = creds.flatMap(c => mkDatasource(S3Config(testBucket, DataFormat.json, c)))
 
       val path = ResourcePath.root() / ResourceName("does-not-exist")
       val read = ds.flatMap(_.loadFull(iRead(path)).value)
 
-      run(read.value) must beLeft.like {
-        case ResourceError.throwableP(ResourceError.PathNotFound(_)) => ok
-      }
+      MonadResourceErr[IO].attempt(read.use(_ => IO.unit)).map(_.toEither must beLeft.like {
+        case ResourceError.PathNotFound(_) => ok
+      })
     }
   }
 
   def assertResultBytes(
-      ds: LightweightDatasourceModule.DS[IO],
+      ds: Resource[IO, LightweightDatasourceModule.DS[IO]],
       path: ResourcePath,
       expected: Array[Byte]) =
-    ds.loadFull(iRead(path)).value flatMap {
+    ds.flatMap(_.loadFull(iRead(path)).value) use {
       case Some(QueryResult.Typed(_, data, ScalarStages.Id)) =>
         data.compile.to(Array).map(_ must_=== expected)
 
@@ -202,9 +203,10 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
     }
 
   def assertPrefixedChildPaths(path: ResourcePath, expected: List[(ResourceName, ResourcePathType)]) =
-    OptionT(datasource.prefixedChildPaths(path))
-      .getOrElseF(IO.raiseError(new Exception(s"Failed to list resources under $path")))
-      .flatMap(gatherMultiple(_)).map(result => {
+    OptionT(datasource.flatMap(_.prefixedChildPaths(path)))
+      .getOrElseF(Resource.liftF(IO.raiseError(new Exception(s"Failed to list resources under $path"))))
+      .use(gatherMultiple(_))
+      .map(result => {
         // assert the same elements, with no duplicates
         result.length must_== expected.length
         result.toSet must_== expected.toSet
@@ -216,32 +218,22 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
 
   def credentials: IO[Option[S3Credentials]] = None.pure[IO]
 
-  val run = λ[IO ~> Id](_.unsafeRunSync)
+  def mkDatasource(config: S3Config)
+      : Resource[IO, LightweightDatasourceModule.DS[IO]] = {
 
-  def mkDatasource[F[_] : ConcurrentEffect : MonadResourceErr](
-      config: S3Config): F[LightweightDatasourceModule.DS[F]] = {
+    import ExecutionContext.Implicits.global
 
-    implicit val ec = ExecutionContext.Implicits.global
-    val builder = AsyncHttpClientBuilder[F].allocated
-    // FIXME: eliminate inheritance from DatasourceSpec and sequence the resource instead of
-    // ignoring clean up here.
-    val client = builder.map(_._1)
-    val signingClient = client.map(AwsV4Signing(config))
-
-    signingClient map (new S3Datasource[F](_, config))
+    AsyncHttpClientBuilder[IO]
+      .map(AwsV4Signing(config))
+      .map(S3Datasource(_, config))
   }
 
-  val datasourceLD = run(mkDatasource[IO](S3Config(testBucket, DataFormat.json, None)))
-  val datasource = run(mkDatasource[IO](S3Config(testBucket, DataFormat.json, None)))
-  val datasourceCSV = run(mkDatasource[IO](S3Config(testBucket, DataFormat.SeparatedValues.Default, None)))
+  val datasource = mkDatasource(S3Config(testBucket, DataFormat.json, None))
+  val datasourceLD = mkDatasource(S3Config(testBucket, DataFormat.ldjson, None))
+  val datasourceCSV = mkDatasource(S3Config(testBucket, DataFormat.SeparatedValues.Default, None))
 }
 
 object S3DatasourceSpec {
-  type G[A] = EitherT[IO, Throwable, A]
-
   implicit val ioMonadResourceErr: MonadError_[IO, ResourceError] =
     MonadError_.facet[IO](ResourceError.throwableP)
-
-  implicit val eitherTMonadResourceErr: MonadError_[G, ResourceError] =
-    MonadError_.facet[G](ResourceError.throwableP)
 }

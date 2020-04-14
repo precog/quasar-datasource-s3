@@ -23,12 +23,12 @@ import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.contrib.pathy._
 
 import cats.Monad
+import cats.effect.Resource
 import cats.syntax.applicative._
-import cats.syntax.flatMap._
 
 import fs2.Stream
+import org.http4s.{Request, Status, Uri}
 import org.http4s.client._
-import org.http4s.{Method, Request, Status, Uri}
 import pathy.Path
 import shims._
 
@@ -36,7 +36,7 @@ object evaluate {
 
   def apply[F[_]: Monad: MonadResourceErr](
       client: Client[F], uri: Uri, file: AFile)
-      : F[Stream[F, Byte]] = {
+      : Resource[F, Stream[F, Byte]] = {
     // Convert the pathy Path to a POSIX path, dropping
     // the first slash, which is what S3 expects for object paths
     val objectPath = Path.posixCodec.printPath(file).drop(1)
@@ -51,8 +51,8 @@ object evaluate {
 
   private def streamRequest[F[_]: Monad: MonadResourceErr](
       client: Client[F], req: Request[F], file: AFile)
-      : F[Stream[F, Byte]] =
-    client.status(req.withMethod(Method.HEAD)) flatMap {
+      : Resource[F, Stream[F, Byte]] =
+    client.run(req).evalMap[F, Stream[F, Byte]](res => res.status match {
       case Status.NotFound =>
         MonadResourceErr[F].raiseError(ResourceError.pathNotFound(ResourcePath.leaf(file)))
 
@@ -60,11 +60,11 @@ object evaluate {
         MonadResourceErr[F].raiseError(accessDeniedError(ResourcePath.leaf(file)))
 
       case Status.Ok =>
-        client.stream(req).flatMap(_.body).pure[F]
+        res.body.pure[F]
 
       case other =>
         MonadResourceErr[F].raiseError(unexpectedStatusError(
           ResourcePath.leaf(file),
           other))
-    }
+    })
 }
