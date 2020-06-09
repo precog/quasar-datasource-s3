@@ -20,7 +20,7 @@ import slamdata.Predef._
 
 import quasar.RateLimiting
 import quasar.api.datasource.{DatasourceError, DatasourceType}
-import quasar.api.datasource.DatasourceError.InitializationError
+import quasar.api.datasource.DatasourceError.{ConfigurationError, InitializationError}
 import quasar.connector.{ByteStore, MonadResourceErr}
 import quasar.connector.datasource.LightweightDatasourceModule
 import quasar.physical.s3.S3Datasource.{Live, NotLive, Redirected}
@@ -83,6 +83,9 @@ object S3DatasourceModule extends LightweightDatasourceModule {
           .asLeft[LightweightDatasourceModule.DS[F]]
           .pure[Resource[F, ?]]
     }
+
+  def reconfigure(original: Json, patch: Json): Either[ConfigurationError[Json], Json] =
+    Right(patch)
 
   override def sanitizeConfig(config: Json): Json = config.as[S3Config].result match {
     case Left(_) =>
