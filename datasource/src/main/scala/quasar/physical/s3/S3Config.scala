@@ -19,13 +19,22 @@ package quasar.physical.s3
 import slamdata.Predef._
 import quasar.connector.{CompressionScheme, DataFormat}
 
+import cats.implicits._
 import argonaut._ , Argonaut._
 import org.http4s.Uri
 
 final case class S3Config(
     bucket: Uri,
     format: DataFormat,
-    credentials: Option[S3Credentials])
+    credentials: Option[S3Credentials]) { self =>
+
+  def reconfigure(patch: S3Config): Either[S3Config, S3Config] = patch.credentials match {
+    case Some(_) => patch.sanitize.asLeft[S3Config]
+    case None => self.copy(bucket = patch.bucket, format = patch.format).asRight[S3Config]
+  }
+
+  def sanitize: S3Config = self.copy(credentials = credentials as S3Config.RedactedCreds)
+}
 
 final case class AccessKey(value: String)
 final case class SecretKey(value: String)
@@ -34,9 +43,11 @@ final case class Region(name: String)
 final case class S3Credentials(accessKey: AccessKey, secretKey: SecretKey, region: Region)
 
 object S3Config {
+  private val Redacted = "<REDACTED>"
+  private val RedactedCreds = S3Credentials(AccessKey(Redacted), SecretKey(Redacted), Region(Redacted))
+
   private val failureMsg =
     "Failed to parse configuration for S3 connector."
-
 
   implicit val uriCodec: CodecJson[Uri] = CodecJson(
     u => Json.jString(u.renderString),
