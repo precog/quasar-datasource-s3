@@ -136,21 +136,21 @@ class S3DatasourceModuleSpec extends Specification {
         S3DatasourceModule.reconfigure(incorrect, incorrect) must beLeft(
           MalformedConfiguration(
             S3DatasourceModule.kind,
-            S3DatasourceModule.sanitizeConfig(incorrect),
+            incorrect,
             "Source configuration in reconfiguration is malformed."))
       }
       "source" >> {
         S3DatasourceModule.reconfigure(incorrect, patchJson) must beLeft(
           MalformedConfiguration(
             S3DatasourceModule.kind,
-            S3DatasourceModule.sanitizeConfig(incorrect),
+            incorrect,
             "Source configuration in reconfiguration is malformed."))
       }
       "patch" >> {
         S3DatasourceModule.reconfigure(sourceJson, incorrect) must beLeft(
           MalformedConfiguration(
             S3DatasourceModule.kind,
-            S3DatasourceModule.sanitizeConfig(incorrect),
+            incorrect,
             "Patch configuration in reconfiguration is malformed."))
       }
     }

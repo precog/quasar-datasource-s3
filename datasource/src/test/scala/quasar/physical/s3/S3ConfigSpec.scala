@@ -70,7 +70,7 @@ class S3ConfigSpec extends Specification {
     }
   }
 
-  "sanitize removes sensible information" >> {
+  "sanitize removes sensitive information" >> {
     "credentials presented" >> {
       val inp = S3Config(
         Uri.uri("www.foo.bar"),
