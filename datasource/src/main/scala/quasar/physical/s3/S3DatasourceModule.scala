@@ -31,10 +31,7 @@ import scala.util.Either
 import argonaut.{Json, Argonaut}, Argonaut._
 import cats.effect.{ConcurrentEffect, ContextShift, Resource, Timer}
 import cats.kernel.Hash
-import cats.syntax.applicative._
-import cats.syntax.either._
-import cats.syntax.functor._
-import cats.instances.option._
+import cats.implicits._
 import org.http4s.client.Client
 import org.http4s.client.middleware.FollowRedirect
 import scalaz.NonEmptyList
@@ -43,8 +40,6 @@ import shims._
 object S3DatasourceModule extends LightweightDatasourceModule {
 
   private val MaxRedirects = 3
-  private val Redacted = "<REDACTED>"
-  private val RedactedCreds = S3Credentials(AccessKey(Redacted), SecretKey(Redacted), Region(Redacted))
 
   def kind: DatasourceType = s3.datasourceKind
 
@@ -84,14 +79,33 @@ object S3DatasourceModule extends LightweightDatasourceModule {
           .pure[Resource[F, ?]]
     }
 
-  def reconfigure(original: Json, patch: Json): Either[ConfigurationError[Json], Json] =
-    Right(patch)
+  def reconfigure(originalJson: Json, patchJson: Json): Either[ConfigurationError[Json], Json] = for {
+    original <- originalJson.as[S3Config].result.leftMap(_ =>
+      DatasourceError
+        .MalformedConfiguration[Json](
+          kind,
+          sanitizeConfig(originalJson),
+          "Source configuration in reconfiguration is malformed."))
+
+    patch <- patchJson.as[S3Config].result.leftMap(_ =>
+      DatasourceError
+        .MalformedConfiguration[Json](
+          kind,
+          sanitizeConfig(patchJson),
+          "Patch configuration in reconfiguration is malformed."))
+
+    reconfigured <- original.reconfigure(patch).leftMap(c =>
+      DatasourceError.InvalidConfiguration[Json](
+        kind,
+        c.asJson,
+        NonEmptyList("Patch configuration contains sensitive information.")))
+  } yield reconfigured.asJson
 
   override def sanitizeConfig(config: Json): Json = config.as[S3Config].result match {
     case Left(_) =>
       config
     case Right(cfg) =>
-      cfg.copy(credentials = cfg.credentials as RedactedCreds).asJson
+      cfg.sanitize.asJson
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.ImplicitParameter"))

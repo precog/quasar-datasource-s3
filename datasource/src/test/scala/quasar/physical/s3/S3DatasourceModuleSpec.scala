@@ -19,17 +19,18 @@ package quasar.physical.s3
 import slamdata.Predef._
 
 import quasar.{NoopRateLimitUpdater, RateLimiting, RateLimiter}
-import quasar.api.datasource.DatasourceError.AccessDenied
+import quasar.api.datasource.DatasourceError._
 import quasar.connector.{ByteStore, ResourceError}
 import quasar.contrib.scalaz.MonadError_
 
 import scala.concurrent.ExecutionContext
 
-import argonaut.Json
+import argonaut.{Argonaut, Json}, Argonaut._
 import cats.effect.{ContextShift, IO, Timer}
 import cats.kernel.instances.uuid._
 import org.specs2.mutable.Specification
 import java.util.UUID
+import scalaz.NonEmptyList
 import shims._
 
 class S3DatasourceModuleSpec extends Specification {
@@ -107,6 +108,93 @@ class S3DatasourceModuleSpec extends Specification {
           "precise" -> Json.jBool(false)))
 
       S3DatasourceModule.sanitizeConfig(conf) must_== migrated
+    }
+  }
+
+  "reconfiguration" >> {
+    val patchJson = Json(
+      "bucket" := Json.jString("www.foo.bar"),
+      "format" := Json.obj(
+        "type" := Json.jString("json"),
+        "variant" := Json.jString("array-wrapped"),
+        "precise" := Json.jBool(false)))
+    val sourceJson = Json(
+      "bucket" := Json.jString("www.bar.baz"),
+      "format" := Json.obj(
+        "type" := Json.jString("json"),
+        "variant" := Json.jString("line-delimited"),
+        "precise" := Json.jBool(false)),
+      "credentials" := Json(
+        "accessKey" := Json.jString("a"),
+        "secretKey" := Json.jString("s"),
+        "region" := Json.jString("r")))
+
+    "returns malformed error if patch or source can't be decoded" >> {
+      val incorrect = Json()
+
+      "both" >> {
+        S3DatasourceModule.reconfigure(incorrect, incorrect) must beLeft(
+          MalformedConfiguration(
+            S3DatasourceModule.kind,
+            S3DatasourceModule.sanitizeConfig(incorrect),
+            "Source configuration in reconfiguration is malformed."))
+      }
+      "source" >> {
+        S3DatasourceModule.reconfigure(incorrect, patchJson) must beLeft(
+          MalformedConfiguration(
+            S3DatasourceModule.kind,
+            S3DatasourceModule.sanitizeConfig(incorrect),
+            "Source configuration in reconfiguration is malformed."))
+      }
+      "patch" >> {
+        S3DatasourceModule.reconfigure(sourceJson, incorrect) must beLeft(
+          MalformedConfiguration(
+            S3DatasourceModule.kind,
+            S3DatasourceModule.sanitizeConfig(incorrect),
+            "Patch configuration in reconfiguration is malformed."))
+      }
+    }
+    "reconfigures non-sensitive fields" >> {
+      val expected = Json(
+        "bucket" := Json.jString("www.foo.bar"),
+        "format" := Json.obj(
+          "type" := Json.jString("json"),
+          "variant" := Json.jString("array-wrapped"),
+          "precise" := Json.jBool(false)),
+        "credentials" := Json(
+          "accessKey" := Json.jString("a"),
+          "secretKey" := Json.jString("s"),
+          "region" := Json.jString("r")))
+      S3DatasourceModule.reconfigure(sourceJson, patchJson) must beRight(expected)
+    }
+
+    "returns invalid configuration error if patch has sensitive information" >> {
+      val sensitivePatch = Json(
+        "bucket" := Json.jString("www.quux.com"),
+        "format" := Json.obj(
+          "type" := Json.jString("json"),
+          "variant" := Json.jString("line-delimited"),
+          "precise" := Json.jBool(false)),
+        "credentials" := Json(
+          "accessKey" := Json.jString("aa"),
+          "secretKey" := Json.jString("ss"),
+          "region" := Json.jString("rr")))
+      val expected = Json(
+        "bucket" := Json.jString("www.quux.com"),
+        "format" := Json.obj(
+          "type" := Json.jString("json"),
+          "variant" := Json.jString("line-delimited"),
+          "precise" := Json.jBool(false)),
+        "credentials" := Json(
+          "accessKey" := Json.jString("<REDACTED>"),
+          "secretKey" := Json.jString("<REDACTED>"),
+          "region" := Json.jString("<REDACTED>")))
+
+      S3DatasourceModule.reconfigure(sourceJson, sensitivePatch) must beLeft(
+        InvalidConfiguration(
+          S3DatasourceModule.kind,
+          expected,
+          NonEmptyList("Patch configuration contains sensitive information.")))
     }
   }
 }
