@@ -22,7 +22,7 @@ import quasar.RateLimiting
 import quasar.api.datasource.{DatasourceError, DatasourceType}
 import quasar.api.datasource.DatasourceError.{ConfigurationError, InitializationError}
 import quasar.connector.{ByteStore, MonadResourceErr}
-import quasar.connector.datasource.LightweightDatasourceModule
+import quasar.connector.datasource.{LightweightDatasourceModule, Reconfiguration}
 import quasar.physical.s3.S3Datasource.{Live, NotLive, Redirected}
 
 import scala.concurrent.ExecutionContext
@@ -79,27 +79,31 @@ object S3DatasourceModule extends LightweightDatasourceModule {
           .pure[Resource[F, ?]]
     }
 
-  def reconfigure(originalJson: Json, patchJson: Json): Either[ConfigurationError[Json], Json] = for {
-    original <- originalJson.as[S3Config].result.leftMap(_ =>
-      DatasourceError
-        .MalformedConfiguration[Json](
-          kind,
-          sanitizeConfig(originalJson),
-          "Source configuration in reconfiguration is malformed."))
+  def reconfigure(originalJson: Json, patchJson: Json): Either[ConfigurationError[Json], (Reconfiguration, Json)] = {
+    val back = for {
+      original <- originalJson.as[S3Config].result.leftMap(_ =>
+        DatasourceError
+          .MalformedConfiguration[Json](
+            kind,
+            sanitizeConfig(originalJson),
+            "Source configuration in reconfiguration is malformed."))
 
-    patch <- patchJson.as[S3Config].result.leftMap(_ =>
-      DatasourceError
-        .MalformedConfiguration[Json](
-          kind,
-          sanitizeConfig(patchJson),
-          "Patch configuration in reconfiguration is malformed."))
+      patch <- patchJson.as[S3Config].result.leftMap(_ =>
+        DatasourceError
+          .MalformedConfiguration[Json](
+            kind,
+            sanitizeConfig(patchJson),
+            "Patch configuration in reconfiguration is malformed."))
 
-    reconfigured <- original.reconfigure(patch).leftMap(c =>
-      DatasourceError.InvalidConfiguration[Json](
-        kind,
-        c.asJson,
-        NonEmptyList("Patch configuration contains sensitive information.")))
-  } yield reconfigured.asJson
+      reconfigured <- original.reconfigure(patch).leftMap(c =>
+        DatasourceError.InvalidConfiguration[Json](
+          kind,
+          c.asJson,
+          NonEmptyList("Patch configuration contains sensitive information.")))
+    } yield reconfigured.asJson
+
+    back.tupleLeft(Reconfiguration.Reset)
+  }
 
   override def sanitizeConfig(config: Json): Json = config.as[S3Config].result match {
     case Left(_) =>
