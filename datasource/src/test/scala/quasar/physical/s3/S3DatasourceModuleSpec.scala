@@ -21,6 +21,7 @@ import slamdata.Predef._
 import quasar.{NoopRateLimitUpdater, RateLimiting, RateLimiter}
 import quasar.api.datasource.DatasourceError._
 import quasar.connector.{ByteStore, ResourceError}
+import quasar.connector.datasource.Reconfiguration
 import quasar.contrib.scalaz.MonadError_
 
 import scala.concurrent.ExecutionContext
@@ -165,7 +166,7 @@ class S3DatasourceModuleSpec extends Specification {
           "accessKey" := Json.jString("a"),
           "secretKey" := Json.jString("s"),
           "region" := Json.jString("r")))
-      S3DatasourceModule.reconfigure(sourceJson, patchJson) must beRight(expected)
+      S3DatasourceModule.reconfigure(sourceJson, patchJson) must beRight((Reconfiguration.Reset, expected))
     }
 
     "returns invalid configuration error if patch has sensitive information" >> {
