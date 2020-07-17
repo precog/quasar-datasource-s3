@@ -27,7 +27,6 @@ import quasar.contrib.scalaz.MonadError_
 import quasar.qscript.InterpretedRead
 
 import java.nio.charset.Charset
-import scala.concurrent.ExecutionContext
 
 import cats.data.OptionT
 import cats.effect.{IO, Resource}
@@ -222,8 +221,6 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
 
   def mkDatasource(config: S3Config)
       : Resource[IO, LightweightDatasourceModule.DS[IO]] = {
-
-    import ExecutionContext.Implicits.global
 
     AsyncHttpClientBuilder[IO]
       .map(AwsV4Signing(config))
