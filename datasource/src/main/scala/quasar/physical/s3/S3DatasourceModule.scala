@@ -29,7 +29,7 @@ import scala.concurrent.ExecutionContext
 import scala.util.Either
 
 import argonaut.{Json, Argonaut}, Argonaut._
-import cats.effect.{ConcurrentEffect, ContextShift, Resource, Timer}
+import cats.effect.{ConcurrentEffect, ContextShift, Resource, Sync, Timer}
 import cats.kernel.Hash
 import cats.implicits._
 import org.http4s.client.Client
@@ -77,6 +77,18 @@ object S3DatasourceModule extends LightweightDatasourceModule {
           .invalidConfiguration[Json, InitializationError[Json]](kind, sanitizeConfig(config), NonEmptyList(msg))
           .asLeft[LightweightDatasourceModule.DS[F]]
           .pure[Resource[F, ?]]
+    }
+
+  def migrateConfig[F[_]: Sync](config: Json): F[Either[ConfigurationError[Json], Json]] =
+    Sync[F] delay {
+      config.as[S3Config].result match {
+        case Left(_) =>
+          Left(DatasourceError.MalformedConfiguration[Json](
+            kind,
+            sanitizeConfig(config),
+            "Configuration to migrate is malformed."))
+        case Right(cfg) => Right(cfg.asJson)
+      }
     }
 
   def reconfigure(originalJson: Json, patchJson: Json): Either[ConfigurationError[Json], (Reconfiguration, Json)] = {
