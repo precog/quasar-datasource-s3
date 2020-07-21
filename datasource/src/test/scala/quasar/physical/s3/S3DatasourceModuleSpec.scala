@@ -71,6 +71,34 @@ class S3DatasourceModuleSpec extends Specification {
         .unsafeRunSync()
   }
 
+  "migration" in {
+    "migrate config as itself" >> {
+      val config = Json(
+        "bucket" := Json.jString("www.quux.com"),
+        "format" := Json.obj(
+          "type" := Json.jString("json"),
+          "variant" := Json.jString("line-delimited"),
+          "precise" := Json.jBool(false)),
+        "credentials" := Json(
+          "accessKey" := Json.jString("aa"),
+          "secretKey" := Json.jString("ss"),
+          "region" := Json.jString("rr")))
+
+      S3DatasourceModule.migrateConfig[IO](config).unsafeRunSync() must beRight(config)
+    }
+
+    "fail to migrate malformed config" >> {
+      val malformed = "malformed".asJson
+
+      val error = MalformedConfiguration(
+        S3DatasourceModule.kind,
+        malformed,
+        "Configuration to migrate is malformed.")
+
+      S3DatasourceModule.migrateConfig[IO](malformed).unsafeRunSync() must beLeft(error)
+    }
+  }
+
   "sanitizeConfig" in {
     "removes AccessKey, SecretKey and Region from credentials" >> {
       val conf = Json.obj(
