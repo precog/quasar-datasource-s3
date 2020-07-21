@@ -126,7 +126,6 @@ object S3DatasourceModule extends LightweightDatasourceModule {
 
   @SuppressWarnings(Array("org.wartremover.warts.ImplicitParameter"))
   private def mkClient[F[_]: ConcurrentEffect](conf: S3Config)
-      (implicit ec: ExecutionContext)
       : Resource[F, Client[F]] =
     AsyncHttpClientBuilder[F].map[F, Client[F]](AwsV4Signing(conf))
 }
