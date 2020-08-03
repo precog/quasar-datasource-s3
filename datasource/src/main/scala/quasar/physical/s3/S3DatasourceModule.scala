@@ -21,12 +21,13 @@ import slamdata.Predef._
 import quasar.RateLimiting
 import quasar.api.datasource.{DatasourceError, DatasourceType}
 import quasar.api.datasource.DatasourceError.{ConfigurationError, InitializationError}
-import quasar.connector.{ByteStore, MonadResourceErr}
+import quasar.connector.{ByteStore, MonadResourceErr, ExternalCredentials}
 import quasar.connector.datasource.{LightweightDatasourceModule, Reconfiguration}
 import quasar.physical.s3.S3Datasource.{Live, NotLive, Redirected}
 
 import scala.concurrent.ExecutionContext
 import scala.util.Either
+import java.util.UUID
 
 import argonaut.{Json, Argonaut}, Argonaut._
 import cats.effect.{ConcurrentEffect, ContextShift, Resource, Sync, Timer}
@@ -47,7 +48,8 @@ object S3DatasourceModule extends LightweightDatasourceModule {
   def lightweightDatasource[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer, A: Hash](
       config: Json,
       rateLimiting: RateLimiting[F, A],
-      byteStore: ByteStore[F])(
+      byteStore: ByteStore[F],
+      getAuth: UUID => F[Option[ExternalCredentials[F]]])(
       implicit ec: ExecutionContext)
       : Resource[F, Either[InitializationError[Json], LightweightDatasourceModule.DS[F]]] =
     config.as[S3Config].result match {
