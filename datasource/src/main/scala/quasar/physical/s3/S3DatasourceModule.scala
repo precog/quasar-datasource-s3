@@ -62,9 +62,11 @@ object S3DatasourceModule extends LightweightDatasourceModule {
 
           s3Ds.isLive(MaxRedirects) map {
             case Redirected(newConfig) =>
+              println("redirect")
               Right(new S3Datasource[F](redirectClient, newConfig))
 
             case Live =>
+              println("live")
               Right(new S3Datasource[F](redirectClient, s3Config))
 
             case NotLive =>
