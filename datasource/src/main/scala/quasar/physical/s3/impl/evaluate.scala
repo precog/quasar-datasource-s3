@@ -23,7 +23,7 @@ import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.contrib.pathy._
 
 import cats.Monad
-import cats.effect.Resource
+import cats.effect.{Resource, ExitCase}
 import cats.syntax.applicative._
 
 import fs2.Stream
@@ -60,7 +60,12 @@ object evaluate {
         MonadResourceErr[F].raiseError(accessDeniedError(ResourcePath.leaf(file)))
 
       case Status.Ok =>
-        res.body.pure[F]
+        res.body.onFinalizeCase {
+          case ExitCase.Error(e) => {println("exit case error"); ().pure[F]}
+          case ExitCase.Completed => {println("exit case completed"); ().pure[F]}
+          case ExitCase.Canceled => {println("exit case canceled"); ().pure[F]}
+        }.pure[F]
+        //res.body.pure[F]
 
       case other =>
         MonadResourceErr[F].raiseError(unexpectedStatusError(
