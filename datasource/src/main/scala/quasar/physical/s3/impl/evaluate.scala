@@ -22,15 +22,14 @@ import quasar.api.resource.ResourcePath
 import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.contrib.pathy._
 
-import cats.{Functor, Monad}
+import cats.Functor
 import cats.effect.{ExitCase, Resource, Sync}
-import cats.syntax.applicative._
 import cats.effect.concurrent.Ref
 import cats.implicits._
 
 import fs2.{Stream, Pipe}
-import org.http4s.{Header, Headers, RangeUnit, Request, Status, Uri}
-import org.http4s.headers.{`Content-Length`, `Content-Range`}
+import org.http4s.{Headers, RangeUnit, Request, Status, Uri}
+import org.http4s.headers.`Content-Range`
 import org.http4s.headers.Range.SubRange
 import org.http4s.client._
 import pathy.Path
@@ -66,12 +65,12 @@ object evaluate {
   private def streamRequest[F[_]: Sync: MonadResourceErr](
       client: Client[F], req: Request[F], file: AFile, ref: Ref[F, ByteState])
       : Resource[F, Stream[F, Byte]] =
-    client.run(req).evalMap[F, Stream[F, Byte]](res => res.status match {
+    client.run(req).flatMap[F, Stream[F, Byte]](res => res.status match {
       case Status.NotFound =>
-        MonadResourceErr[F].raiseError(ResourceError.pathNotFound(ResourcePath.leaf(file)))
+        Resource.liftF(MonadResourceErr[F].raiseError(ResourceError.pathNotFound(ResourcePath.leaf(file))))
 
       case Status.Forbidden =>
-        MonadResourceErr[F].raiseError(accessDeniedError(ResourcePath.leaf(file)))
+        Resource.liftF(MonadResourceErr[F].raiseError(ResourceError.pathNotFound(ResourcePath.leaf(file))))
 
       case Status.Ok =>
         val current: Stream[F, Byte] = res.body.through(recordSeenBytes[F](ref)) onFinalizeCase {
@@ -104,14 +103,9 @@ object evaluate {
         for {
           cur <- Resource.pure[F, Stream[F, Byte]](current)
           nxt <- next
-        } yield {
-          val x: Stream[F, Byte] = cur ++ nxt
-          x
-        }
+        } yield cur ++ nxt
 
       case other =>
-        MonadResourceErr[F].raiseError(unexpectedStatusError(
-          ResourcePath.leaf(file),
-          other))
+        Resource.liftF(MonadResourceErr[F].raiseError(ResourceError.pathNotFound(ResourcePath.leaf(file))))
     })
 }
