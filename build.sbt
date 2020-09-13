@@ -55,10 +55,11 @@ lazy val core = project
     ),
 
     libraryDependencies ++= Seq(
-      "com.precog"             %% "quasar-foundation"   % managedVersions.value("precog-quasar") % Test classifier "tests",
-      "com.precog"             %% "http4s-dsl"          % http4sVersion % Test,
-      "org.specs2"             %% "specs2-core"         % specsVersion % Test,
-      "org.specs2"             %% "specs2-scalaz"       % specsVersion % Test,
-      "org.specs2"             %% "specs2-scalacheck"   % specsVersion % Test
+      "com.codecommit"         %% "cats-effect-testing-specs2" % "0.4.1" % Test,
+      "com.precog"             %% "quasar-foundation"          % managedVersions.value("precog-quasar") % Test classifier "tests",
+      "com.precog"             %% "http4s-dsl"                 % http4sVersion % Test,
+      "org.specs2"             %% "specs2-core"                % specsVersion % Test,
+      "org.specs2"             %% "specs2-scalaz"              % specsVersion % Test,
+      "org.specs2"             %% "specs2-scalacheck"          % specsVersion % Test
     ))
   .enablePlugins(QuasarPlugin)

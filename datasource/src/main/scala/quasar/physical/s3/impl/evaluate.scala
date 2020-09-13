@@ -27,6 +27,8 @@ import cats.effect.{ExitCase, Resource, Sync}
 import cats.effect.concurrent.Ref
 import cats.implicits._
 
+import java.lang.Throwable
+
 import fs2.{Stream, Pipe}
 import org.http4s.{Headers, RangeUnit, Request, Status, Uri}
 import org.http4s.headers.`Content-Range`
@@ -75,17 +77,32 @@ object evaluate {
       case Status.Ok =>
         val current: Stream[F, Byte] = res.body.through(recordSeenBytes[F](ref)) onFinalizeCase {
           case ExitCase.Error(e) =>
-            ref.update(s => s.copy(previous = s.current, continue = false)) >>
-              MonadResourceErr[F].raiseError[Unit](ResourceError.connectionFailed(
-                ResourcePath.leaf(file),
-                Some("Unexpected response stream termination."),
-                Some(e)))
+            println(">>>>>>>>>> error case")
+            ref.get flatMap { state =>
+              if (state.previous == state.current) {
+                println("state previous: " + state.previous)
+                println("state current: " + state.current)
+                MonadResourceErr[F].raiseError[Unit](ResourceError.connectionFailed(
+                  ResourcePath.leaf(file),
+                  Some("Unexpected response stream termination."),
+                  Some(e)))
+              }
+              else
+                println("error else case")
+                ref.update(s => s.copy(previous = s.current, continue = true))
+            }
 
           case ExitCase.Completed =>
+            println(">>>>>>>>>> completed case")
             ref.update(_.copy(continue = false))
 
           case ExitCase.Canceled =>
-            ref.update(_.copy(continue = true))
+            println(">>>>>>>>>> canceled case")
+            ref.update(s => s.copy(previous = s.current, continue = false)) >>
+              MonadResourceErr[F].raiseError[Unit](ResourceError.connectionFailed(
+                ResourcePath.leaf(file),
+                Some("Canceled response stream termination."),
+                Some(new Throwable("Canceled response") )))
         }
 
         val next: Resource[F, Stream[F, Byte]] = Resource.liftF(ref.get) flatMap { state =>
