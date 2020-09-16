@@ -98,11 +98,7 @@ object evaluate {
 
           case ExitCase.Canceled =>
             println(">>>>>>>>>> canceled case")
-            ref.update(s => s.copy(previous = s.current, continue = false)) >>
-              MonadResourceErr[F].raiseError[Unit](ResourceError.connectionFailed(
-                ResourcePath.leaf(file),
-                Some("Canceled response stream termination."),
-                Some(new Throwable("Canceled response") )))
+            ref.update(_.copy(continue = false))
         }
 
         val next: Resource[F, Stream[F, Byte]] = Resource.liftF(ref.get) flatMap { state =>

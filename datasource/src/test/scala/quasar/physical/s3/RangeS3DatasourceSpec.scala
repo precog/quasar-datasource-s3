@@ -34,7 +34,6 @@ import fs2.Stream
 import org.http4s._
 import org.http4s.client.Client
 import org.http4s.client.dsl.Http4sClientDsl
-import org.http4s.headers.`Content-Range`
 import org.http4s.dsl._
 import org.http4s.implicits._
 
@@ -61,19 +60,21 @@ object RangeS3DatasourceSpec extends Specification
     implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
     implicit val ec: ExecutionContext = ExecutionContext.global
 
+    val cancel: IO[Unit] = Stream.never[IO].compile.drain.unsafeRunCancelable(_ => ())
+
     val routes = HttpRoutes.of[IO] {
-        case GET -> Root / "error" => IO(
-          Response(
-            Status.Ok,
-            body = Stream.emits[IO, Byte]("abcd".getBytes(StandardCharsets.UTF_8)) ++ Stream.raiseError[IO](new Throwable("error"))))
-        case req @ GET -> Root / "ok" => IO(
-          Response(
-            Status.Ok,
-            body = Stream.emits("efgh".getBytes(StandardCharsets.UTF_8))))
-        case GET -> Root / "cancel" => IO(
-          Response(
-            Status.Ok,
-            body = Stream.emits("ijkl".getBytes(StandardCharsets.UTF_8)) ++  Stream.raiseError[IO](new Throwable("canceled request"))))
+      case GET -> Root / "error" => IO(
+        Response(
+          Status.Ok,
+          body = Stream.emits[IO, Byte]("abcd".getBytes(StandardCharsets.UTF_8)) ++ Stream.raiseError[IO](new Throwable("error"))))
+      case GET -> Root / "ok" => IO(
+        Response(
+          Status.Ok,
+          body = Stream.emits("efgh".getBytes(StandardCharsets.UTF_8))))
+      case GET -> Root / "cancel" => IO(
+        Response(
+          Status.Ok,
+          body = Stream.eval(cancel).drain))
     }
 
     def client: Client[IO] = {
@@ -103,7 +104,7 @@ object RangeS3DatasourceSpec extends Specification
       for {
         c: Stream[IO, Byte] <- impl.evaluate(client, testBucket, root </> file("cancel"))
       } yield {
-        c.through(fs2.text.utf8Decode).compile.toList.unsafeRunSync must_=== List("a")
+        c.through(fs2.text.utf8Decode).compile.toList.unsafeRunSync must_=== List()
       }
     }
 
