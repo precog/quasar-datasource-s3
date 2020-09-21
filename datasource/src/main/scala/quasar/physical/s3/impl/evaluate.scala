@@ -61,7 +61,6 @@ object evaluate {
       .evalTap(chunk => ref.getAndUpdate(s => s.copy(current = s.current + chunk.size)))
       .flatMap(Stream.chunk(_))
 
-  //private case class ByteState(seen: Long, continue: Boolean)
   private case class ByteState(previous: Long, current: Long, continue: Boolean)
 
   private def streamRequest[F[_]: Sync: MonadResourceErr](
@@ -75,40 +74,51 @@ object evaluate {
         Resource.liftF(MonadResourceErr[F].raiseError(ResourceError.pathNotFound(ResourcePath.leaf(file))))
 
       case Status.Ok =>
+        println(">>>>>>>>>> Status.Ok")
         val current: Stream[F, Byte] = res.body.through(recordSeenBytes[F](ref)) onFinalizeCase {
           case ExitCase.Error(e) =>
-            println(">>>>>>>>>> error case")
+            println(">>>>>>>>>> current - Error exit case")
             ref.get flatMap { state =>
+              println(">>>>>>>>>> current - state previous: " + state.previous)
+              println(">>>>>>>>>> current - state current: " + state.current)
               if (state.previous == state.current) {
-                println("state previous: " + state.previous)
-                println("state current: " + state.current)
+                println(">>>>>>>>>> current - no progress")
+                println(">>>>>>>>>> current - same state previous: " + state.previous)
+                println(">>>>>>>>>> current - same state current: " + state.current)
                 MonadResourceErr[F].raiseError[Unit](ResourceError.connectionFailed(
                   ResourcePath.leaf(file),
                   Some("Unexpected response stream termination."),
                   Some(e)))
               }
-              else
-                println("error else case")
+              else {
+                println(">>>>>>>>>> current - error else case")
                 ref.update(s => s.copy(previous = s.current, continue = true))
+              }
             }
 
           case ExitCase.Completed =>
-            println(">>>>>>>>>> completed case")
+            println(">>>>>>>>>> current - Completed exit case")
             ref.update(_.copy(continue = false))
 
           case ExitCase.Canceled =>
-            println(">>>>>>>>>> canceled case")
+            println(">>>>>>>>>> current - Canceled exit case")
             ref.update(_.copy(continue = false))
         }
 
         val next: Resource[F, Stream[F, Byte]] = Resource.liftF(ref.get) flatMap { state =>
           if (state.continue) {
-            val newReq =
+            println(">>>>>>>>>> next - continuing: " + state.continue)
+            println("next - state previous: " + state.previous)
+            println("next - state current: " + state.current)
+            val newReq: Request[F] =
               req.withHeaders(Headers.of(
                 `Content-Range`(RangeUnit.Bytes, SubRange(state.current, None), None)))
 
             streamRequest[F](client, newReq, file, ref)
           } else {
+            println(">>>>>>>>>> next - not continuing: " + state.continue)
+            println(">>>>>>>>>> next - state previous: " + state.previous)
+            println(">>>>>>>>>> next - state current: " + state.current)
             Resource.pure[F, Stream[F, Byte]](Stream.empty)
           }
         }
