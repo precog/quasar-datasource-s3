@@ -30,7 +30,7 @@ The configuration of the S3 datasource has the following JSON format
     "closeQuote": String,
     "escape": String
   },
-  ["compressionScheme": "gzip",]
+  ["compressionScheme": "gzip" | "zip"]
   ["credentials": Object]
 }
 ```
@@ -38,7 +38,7 @@ The configuration of the S3 datasource has the following JSON format
 * `bucket` the URL of the S3 bucket to use, e.g. `https://yourbucket.s3.amazonaws.com`
 * `format` the format of the resource referred to by `url`. CSV/TSV, array wrapped json and line delimited jsons are supported
 * `compressionScheme` (optional, default = empty) compression scheme that the resources in the container are assumed
-  to be compressed with. Currrently gzip (`"gzip"`) is supported.
+  to be compressed with. Currrently `"gzip"` and `"zip"` are supported.
   If omitted, the resources are not assumed to be compressed.
 * `credentials` (optional, default = empty) S3 credentials to use for access in case the bucket is not public.
   Object has the following format: `{ "accessKey": String, "secretKey": String, "region": String }`.
