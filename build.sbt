@@ -62,3 +62,4 @@ lazy val core = project
       "org.specs2"             %% "specs2-scalacheck"   % specsVersion % Test
     ))
   .enablePlugins(QuasarPlugin)
+  .evictToLocal("QUASAR_PATH", "connector", true)

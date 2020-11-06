@@ -84,7 +84,7 @@ class S3DatasourceModuleSpec extends Specification {
           "secretKey" := Json.jString("ss"),
           "region" := Json.jString("rr")))
 
-      S3DatasourceModule.migrateConfig[IO](config).unsafeRunSync() must beRight(config)
+      S3DatasourceModule.migrateConfig[IO](1, 1, config).unsafeRunSync() must beRight(config)
     }
 
     "fail to migrate malformed config" >> {
@@ -95,7 +95,7 @@ class S3DatasourceModuleSpec extends Specification {
         malformed,
         "Configuration to migrate is malformed.")
 
-      S3DatasourceModule.migrateConfig[IO](malformed).unsafeRunSync() must beLeft(error)
+      S3DatasourceModule.migrateConfig[IO](1, 1, malformed).unsafeRunSync() must beLeft(error)
     }
   }
 
