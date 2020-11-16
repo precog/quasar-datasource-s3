@@ -81,7 +81,7 @@ object S3DatasourceModule extends LightweightDatasourceModule {
           .pure[Resource[F, ?]]
     }
 
-  def migrateConfig[F[_]: Sync](config: Json): F[Either[ConfigurationError[Json], Json]] =
+  def migrateConfig[F[_]: Sync](from: Long, to: Long, config: Json): F[Either[ConfigurationError[Json], Json]] =
     Sync[F] delay {
       config.as[S3Config].result match {
         case Left(_) =>
