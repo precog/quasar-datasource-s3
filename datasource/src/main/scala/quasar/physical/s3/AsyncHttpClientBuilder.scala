@@ -18,6 +18,7 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 
+import quasar.concurrent.NamedDaemonThreadFactory
 import quasar.contrib.proxy.Search
 
 import org.asynchttpclient.proxy.{ProxyServer, ProxyServerSelector}
@@ -26,7 +27,6 @@ import org.asynchttpclient.{AsyncHttpClientConfig, DefaultAsyncHttpClientConfig}
 
 import org.http4s.client.Client
 import org.http4s.client.asynchttpclient.AsyncHttpClient
-import org.http4s.util.threads.threadFactory
 
 import org.slf4s.Logging
 
@@ -51,9 +51,8 @@ object AsyncHttpClientBuilder extends Logging {
       .setReadTimeout(Int.MaxValue)
       .setConnectTimeout(Int.MaxValue)
       .setProxyServerSelector(ProxyVoleProxyServerSelector(proxySelector))
-      .setThreadFactory(threadFactory(name = { i =>
-        s"http4s-async-http-client-worker-${i}"
-      })).build()
+      .setThreadFactory(new NamedDaemonThreadFactory("http4s-async-http-client-worker"))
+      .build()
 
   private[s3] def sortProxies(proxies: List[Proxy]): List[Proxy] =
     proxies.sortWith((l, r) => (l.`type`, r.`type`) match {

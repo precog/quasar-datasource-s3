@@ -18,8 +18,7 @@ package quasar.physical.s3.impl
 
 import slamdata.Predef._
 
-import cats.Applicative
-import cats.effect.Sync
+import cats.effect.{Bracket, Sync}
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
 import cats.syntax.option._
@@ -48,16 +47,20 @@ object preflightCheck {
       case _ => none.pure[F]
     }
 
-  private def redirectFor[F[_]: Applicative](client: Client[F], u: Uri)
+  private def redirectFor[F[_]: Bracket[?[_], Throwable]](client: Client[F], u: Uri)
       : F[Option[(Status, Uri)]] =
-    client.fetch(Request[F](uri = appendPathS3Encoded(u, ""), method = Method.HEAD))(resp => resp.status match {
-      case status @ (MovedPermanently | PermanentRedirect) =>
-        resp.headers.get(Location).map(loc => (status, loc.uri)).pure[F]
-      case status @ (TemporaryRedirect | Found | SeeOther) =>
-        (status, u).some.pure[F]
-      case Ok =>
-        (Ok, u).some.pure[F]
-      case _ =>
-        none.pure[F]
-    })
+    client.run(Request[F](uri = appendPathS3Encoded(u, ""), method = Method.HEAD)) use { resp =>
+      val back = resp.status match {
+        case status @ (MovedPermanently | PermanentRedirect) =>
+          resp.headers.get(Location).map(loc => (status, loc.uri))
+        case status @ (TemporaryRedirect | Found | SeeOther) =>
+          (status, u).some
+        case Ok =>
+          (Ok, u).some
+        case _ =>
+          none
+      }
+
+      back.pure[F]
+    }
 }
