@@ -21,7 +21,7 @@ import slamdata.Predef._
 import quasar.api.datasource.DatasourceType
 import quasar.api.resource.ResourcePath.{Leaf, Root}
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
-import quasar.connector.{MonadResourceErr, QueryResult, ResourceError}
+import quasar.connector.{MonadResourceErr, QueryResult, ResourceError, ResultData}
 import quasar.connector.datasource.{BatchLoader, LightweightDatasource, Loader}
 import quasar.contrib.scalaz.MonadError_
 import quasar.qscript.InterpretedRead
@@ -56,7 +56,7 @@ final class S3Datasource[F[_]: Sync: MonadResourceErr](
 
       case Leaf(file) =>
         impl.evaluate[F](client, config.bucket, file) map { bytes =>
-          QueryResult.typed(config.format, bytes, iRead.stages)
+          QueryResult.typed(config.format, ResultData.Continuous(bytes), iRead.stages)
         }
     }
   }))
