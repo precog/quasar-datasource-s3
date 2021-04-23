@@ -7,4 +7,4 @@ credentials += Credentials(
 resolvers += "GitHub Package Registry" at "https://maven.pkg.github.com/precog/_"
 
 addSbtPlugin("com.precog" % "sbt-precog" % "3.0.1")
-addSbtPlugin("com.precog" % "sbt-quasar-plugin" % "0.2.8")
+addSbtPlugin("com.precog" % "sbt-quasar-plugin" % "1.0.0")
