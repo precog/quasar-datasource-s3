@@ -18,7 +18,7 @@ package quasar.physical.s3
 
 import slamdata.Predef._
 
-import quasar.{NoopRateLimitUpdater, RateLimiting, RateLimiter}
+import quasar.{RateLimiting, RateLimiter}
 import quasar.api.datasource.DatasourceError._
 import quasar.connector.{ByteStore, ResourceError}
 import quasar.connector.datasource.Reconfiguration
@@ -27,7 +27,7 @@ import quasar.contrib.scalaz.MonadError_
 import scala.concurrent.ExecutionContext
 
 import argonaut.{Argonaut, Json}, Argonaut._
-import cats.effect.{ContextShift, IO, Timer}
+import cats.effect.{ContextShift, IO, Resource, Timer}
 import cats.kernel.instances.uuid._
 import org.specs2.mutable.Specification
 import java.util.UUID
@@ -41,8 +41,8 @@ class S3DatasourceModuleSpec extends Specification {
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
   implicit val ec: ExecutionContext = ExecutionContext.global
 
-  val rateLimiting: IO[RateLimiting[IO, UUID]] =
-    RateLimiter[IO, UUID](1.0, IO.delay(UUID.randomUUID()), NoopRateLimitUpdater[IO, UUID])
+  val rateLimiting: Resource[IO, RateLimiting[IO, UUID]] =
+    RateLimiter[IO, UUID](IO.delay(UUID.randomUUID()))
 
   "rejects invalid credentials" >> {
     // slamdata-private-test is a bucket that requires credentials to access
@@ -51,10 +51,10 @@ class S3DatasourceModuleSpec extends Specification {
       "jsonParsing" -> Json.jString("array"))
 
     rateLimiting.flatMap((rl: RateLimiting[IO, UUID]) =>
-      S3DatasourceModule.lightweightDatasource[IO, UUID](conf, rl, ByteStore.void[IO], _ => IO(None))
+      S3DatasourceModule.lightweightDatasource[IO, UUID](conf, rl, ByteStore.void[IO], _ => IO(None)))
         .use(ds => IO(ds must beLike {
           case Left(AccessDenied(_, _, _)) => ok
-        })))
+        }))
         .unsafeRunSync()
   }
 
@@ -64,10 +64,10 @@ class S3DatasourceModuleSpec extends Specification {
       "jsonParsing" -> Json.jString("array"))
 
     rateLimiting.flatMap((rl: RateLimiting[IO, UUID]) =>
-      S3DatasourceModule.lightweightDatasource[IO, UUID](conf, rl, ByteStore.void[IO], _ => IO(None))
+      S3DatasourceModule.lightweightDatasource[IO, UUID](conf, rl, ByteStore.void[IO], _ => IO(None)))
         .use(ds => IO(ds must beLike {
           case Left(AccessDenied(_, _, _)) => ok
-        })))
+        }))
         .unsafeRunSync()
   }
 
