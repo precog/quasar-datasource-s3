@@ -26,18 +26,7 @@ import quasar.physical.s3.S3Error
 
 import cats.data.{EitherT, OptionT}
 import cats.effect.Sync
-import cats.instances.either._
-import cats.instances.int._
-import cats.instances.list._
-import cats.instances.option._
-import cats.instances.tuple._
-import cats.syntax.alternative._
-import cats.syntax.bifunctor._
-import cats.syntax.either._
-import cats.syntax.eq._
-import cats.syntax.functor._
-import cats.syntax.option._
-import cats.syntax.traverse._
+import cats.implicits._
 import fs2.Stream
 import org.http4s.{MalformedMessageBodyFailure, Query, Status}
 import org.http4s.client.{Client, UnexpectedStatus}

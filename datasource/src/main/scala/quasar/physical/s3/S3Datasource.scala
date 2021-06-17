@@ -51,7 +51,7 @@ final class S3Datasource[F[_]: Sync: MonadResourceErr](
   val loaders = NonEmptyList.of(Loader.Batch(BatchLoader.Full { (iRead: InterpretedRead[ResourcePath]) =>
     iRead.path match {
       case Root =>
-        Resource.liftF(MonadError_[F, ResourceError].raiseError[QueryResult[F]](
+        Resource.eval(MonadError_[F, ResourceError].raiseError[QueryResult[F]](
           ResourceError.notAResource(iRead.path)))
 
       case Leaf(file) =>
@@ -82,7 +82,7 @@ final class S3Datasource[F[_]: Sync: MonadResourceErr](
     }
 
   def pathIsResource(path: ResourcePath): Resource[F, Boolean] =
-    Resource.liftF(path match {
+    Resource.eval(path match {
       case Root => false.pure[F]
       case Leaf(file) => Path.refineType(file) match {
         case -\/(_) => false.pure[F]

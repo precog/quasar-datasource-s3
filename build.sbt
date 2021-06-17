@@ -22,10 +22,10 @@ lazy val root = project
   .settings(noPublishSettings)
   .aggregate(core)
 
-val http4sVersion = "0.21.13"
+val http4sVersion = "0.21.23"
 val scalaXmlVersion = "1.1.0"
 
-val catsEffectVersion = "2.0.0"
+val catsEffectVersion = "2.5.1"
 val shimsVersion = "2.0.0"
 val specsVersion = "4.8.3"
 
