@@ -45,17 +45,17 @@ final class GzipS3DatasourceSpec extends S3DatasourceSpec {
     }
 
   override val datasourceLD =
-    Resource.liftF(credentials) flatMap { creds =>
+    Resource.eval(credentials) flatMap { creds =>
       mkDatasource(S3Config(testBucket, DataFormat.gzipped(DataFormat.ldjson), creds))
     }
 
   override val datasource =
-    Resource.liftF(credentials) flatMap { creds =>
+    Resource.eval(credentials) flatMap { creds =>
       mkDatasource(S3Config(testBucket, DataFormat.gzipped(DataFormat.json), creds))
     }
 
   override val datasourceCSV =
-    Resource.liftF(credentials) flatMap { creds =>
+    Resource.eval(credentials) flatMap { creds =>
       mkDatasource(S3Config(
         testBucket,
         DataFormat.gzipped(DataFormat.SeparatedValues.Default),

@@ -179,7 +179,7 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
     }
 
     "reading a non-existent file raises ResourceError.PathNotFound" >>* {
-      val creds = Resource.liftF(credentials)
+      val creds = Resource.eval(credentials)
       val ds = creds.flatMap(c => mkDatasource(S3Config(testBucket, DataFormat.json, c)))
 
       val path = ResourcePath.root() / ResourceName("does-not-exist")
@@ -205,7 +205,7 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
 
   def assertPrefixedChildPaths(path: ResourcePath, expected: List[(ResourceName, ResourcePathType)]) =
     OptionT(datasource.flatMap(_.prefixedChildPaths(path)))
-      .getOrElseF(Resource.liftF(IO.raiseError(new Exception(s"Failed to list resources under $path"))))
+      .getOrElseF(Resource.eval(IO.raiseError(new Exception(s"Failed to list resources under $path"))))
       .use(gatherMultiple(_))
       .map(result => {
         // assert the same elements, with no duplicates

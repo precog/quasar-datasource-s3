@@ -40,7 +40,7 @@ import cats.effect.{ConcurrentEffect, Resource}
 
 object AsyncHttpClientBuilder extends Logging {
   def apply[F[_]: ConcurrentEffect]: Resource[F, Client[F]] =
-    Resource.liftF(Search[F]).flatMap(selector =>
+    Resource.eval(Search[F]).flatMap(selector =>
       AsyncHttpClient.resource(mkConfig(selector)))
 
   def mkConfig[F[_]](proxySelector: ProxySelector): AsyncHttpClientConfig =

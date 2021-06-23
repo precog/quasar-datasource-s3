@@ -62,17 +62,17 @@ final class SecureS3DatasourceSpec extends S3DatasourceSpec {
   private val credsFile = "testCredentials.json"
 
   override val datasourceLD =
-    Resource.liftF(credentials) flatMap { creds =>
+    Resource.eval(credentials) flatMap { creds =>
       mkDatasource(S3Config(testBucket, DataFormat.ldjson, creds))
     }
 
   override val datasource =
-    Resource.liftF(credentials) flatMap { creds =>
+    Resource.eval(credentials) flatMap { creds =>
       mkDatasource(S3Config(testBucket, DataFormat.json, creds))
     }
 
   override val datasourceCSV =
-    Resource.liftF(credentials) flatMap { creds =>
+    Resource.eval(credentials) flatMap { creds =>
       mkDatasource(S3Config(testBucket, DataFormat.SeparatedValues.Default, creds))
     }
 }
