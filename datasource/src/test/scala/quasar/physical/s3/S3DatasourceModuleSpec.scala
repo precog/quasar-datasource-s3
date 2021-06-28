@@ -51,7 +51,7 @@ class S3DatasourceModuleSpec extends Specification {
       "jsonParsing" -> Json.jString("array"))
 
     rateLimiting.flatMap((rl: RateLimiting[IO, UUID]) =>
-      S3DatasourceModule.lightweightDatasource[IO, UUID](conf, rl, ByteStore.void[IO], _ => IO(None)))
+      S3DatasourceModule.datasource[IO, UUID](conf, rl, ByteStore.void[IO], _ => IO(None)))
         .use(ds => IO(ds must beLike {
           case Left(AccessDenied(_, _, _)) => ok
         }))
@@ -64,7 +64,7 @@ class S3DatasourceModuleSpec extends Specification {
       "jsonParsing" -> Json.jString("array"))
 
     rateLimiting.flatMap((rl: RateLimiting[IO, UUID]) =>
-      S3DatasourceModule.lightweightDatasource[IO, UUID](conf, rl, ByteStore.void[IO], _ => IO(None)))
+      S3DatasourceModule.datasource[IO, UUID](conf, rl, ByteStore.void[IO], _ => IO(None)))
         .use(ds => IO(ds must beLike {
           case Left(AccessDenied(_, _, _)) => ok
         }))

@@ -22,7 +22,7 @@ import quasar.ScalarStages
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.common.data.Data
 import quasar.connector._
-import quasar.connector.datasource.{DatasourceSpec, LightweightDatasourceModule}
+import quasar.connector.datasource.{DatasourceSpec, DatasourceModule}
 import quasar.contrib.scalaz.MonadError_
 import quasar.qscript.InterpretedRead
 
@@ -192,7 +192,7 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
   }
 
   def assertResultBytes(
-      ds: Resource[IO, LightweightDatasourceModule.DS[IO]],
+      ds: Resource[IO, DatasourceModule.DS[IO]],
       path: ResourcePath,
       expected: Array[Byte]) =
     ds.flatMap(_.loadFull(iRead(path)).value) use {
@@ -220,7 +220,7 @@ class S3DatasourceSpec extends DatasourceSpec[IO, Stream[IO, ?], ResourcePathTyp
   def credentials: IO[Option[S3Credentials]] = None.pure[IO]
 
   def mkDatasource(config: S3Config)
-      : Resource[IO, LightweightDatasourceModule.DS[IO]] = {
+      : Resource[IO, DatasourceModule.DS[IO]] = {
 
     AsyncHttpClientBuilder[IO]
       .map(AwsV4Signing(config))
