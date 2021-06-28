@@ -22,7 +22,7 @@ import quasar.api.datasource.DatasourceType
 import quasar.api.resource.ResourcePath.{Leaf, Root}
 import quasar.api.resource.{ResourceName, ResourcePath, ResourcePathType}
 import quasar.connector.{MonadResourceErr, QueryResult, ResourceError, ResultData}
-import quasar.connector.datasource.{BatchLoader, LightweightDatasource, Loader}
+import quasar.connector.datasource.{BatchLoader, DatasourceModule, Loader}
 import quasar.contrib.scalaz.MonadError_
 import quasar.qscript.InterpretedRead
 
@@ -42,7 +42,7 @@ import shims._
 final class S3Datasource[F[_]: Sync: MonadResourceErr](
     client: Client[F],
     config: S3Config)
-    extends LightweightDatasource[Resource[F, ?], Stream[F, ?], QueryResult[F]] {
+    extends DatasourceModule.DS[F] {
 
   import S3Datasource._
 

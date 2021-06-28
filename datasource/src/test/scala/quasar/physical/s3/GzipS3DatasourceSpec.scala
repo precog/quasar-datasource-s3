@@ -20,7 +20,7 @@ import slamdata.Predef._
 
 import quasar.api.resource.ResourcePath
 import quasar.connector.{CompressionScheme, QueryResult, DataFormat}
-import quasar.connector.datasource.LightweightDatasourceModule, LightweightDatasourceModule.DS
+import quasar.connector.datasource.DatasourceModule, DatasourceModule.DS
 
 import cats.effect.{IO, Resource}
 
